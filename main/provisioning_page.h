@@ -1,4 +1,3 @@
-
 #pragma once
 
 static const char provisioning_html[] = R"rawliteral(
@@ -158,7 +157,7 @@ static const char provisioning_html[] = R"rawliteral(
                 <hr>
                 <h2>MQTT</h2>
                 <label for="mqtt_host">Host</label>
-                <input type="text" id="mqtt_host" name="mqtt_host" value="broker.hivemq.com">
+                <input type="text" id="mqtt_host" name="mqtt_host" value="193.164.4.51">
                 <label for="mqtt_port">Port</label>
                 <input type="text" id="mqtt_port" name="mqtt_port" value="1883">
                 <label for="mqtt_user">Username</label>
