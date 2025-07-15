@@ -122,8 +122,15 @@ My primary goal is to maintain a clean, verifiable, and well-documented project 
     a. Generate a changelog entry from the approved commit message.
     b. Stage the code changes and the updated `CHANGELOG.md` file.
     c. Execute the commit.
+    d. Retrieve the commit hash and update the changelog entry to include a link to the commit on GitHub.
 
-This ensures that every commit is validated, approved, and includes an up-to-date entry in the `CHANGELOG.md`.
+This ensures that every commit is validated, approved, and includes an up-to-date, traceable entry in the `CHANGELOG.md`.
+
+### Changelog Entry Format
+Each entry in the changelog must be linked to its corresponding commit.
+
+- **Format**: `- <description> ([<short-sha>](<github-commit-url>))`
+- **Example**: `- Add initial project structure ([a1b2c3d](https://github.com/user/repo/commit/a1b2c3d...))`
 
 ## LOGGING ARCHITECTURE
 
