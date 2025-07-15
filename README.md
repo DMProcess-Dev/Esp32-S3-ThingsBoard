@@ -16,6 +16,12 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
   - It connects to the public HiveMQ MQTT broker (`broker.hivemq.com`) and is ready to send and receive data.
 - **Persistent Configuration**:
   - The firmware is currently configured to always start in provisioning mode for development purposes.
+- **ARGB LED Status Indicator**:
+  - The onboard ARGB LED provides a visual indication of the device's status:
+    - **White:** Provisioning mode
+    - **Blue:** Connecting to Wi-Fi
+    - **Green:** Connected to Wi-Fi and MQTT
+    - **Red:** Error state (e.g., Wi-Fi or MQTT connection failed)
 
 ## Getting Started
 
