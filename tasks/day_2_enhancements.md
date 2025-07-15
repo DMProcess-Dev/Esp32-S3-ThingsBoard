@@ -19,8 +19,12 @@ Based on initial testing, this set of tasks focuses on improving the user experi
 
 *   [x] **Hardware Feedback:**
     *   [x] Utilize the onboard ARGB LED for status indication.
-        *   **Provisioning Mode:** White, pulsing
-        *   **Connecting to Wi-Fi:** Blue, blinking
-        *   **Wi-Fi Connected / MQTT Connecting:** Green, blinking
+        *   **Provisioning Mode:** Solid White
+        *   **Connecting to Wi-Fi:** Solid Blue
+        *   **Wi-Fi Connected / MQTT Disconnected:** Solid Yellow
         *   **MQTT Connected:** Solid Green
-        *   **Error State (Connection Failed):** Solid Red
+        *   **MQTT Data Sent:** Brief White flash
+        *   **Wi-Fi Connection Failed:** Solid Red
+*   [x] **UI Polish:**
+    *   [x] Pre-fill the provisioning form with default credentials to speed up testing.
+    *   [x] Fix the Wi-Fi list UI to prevent long network names from breaking the layout.

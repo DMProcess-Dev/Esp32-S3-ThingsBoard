@@ -5,23 +5,21 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
 ## Current Features
 
 - **Web-Based Wi-Fi Provisioning**:
-  - On first boot (or if no credentials are stored), the device starts in Access Point mode.
+  - On first boot, the device starts in Access Point mode.
   - Connect to the **`ESP32-Provisioning`** Wi-Fi network (password: `password`).
-  - Navigate to `http://192.168.4.1` in a web browser.
+  - Navigate to `http://192.168.4.1`. The page comes pre-filled with default credentials for quick setup.
 - **Dynamic Wi-Fi Scanning**:
-  - The provisioning page includes a "Scan for Networks" button that dynamically finds and lists available Wi-Fi networks, showing their SSID, signal strength (RSSI), and security type.
+  - The provisioning page includes a "Scan for Networks" button with an improved UI that gracefully handles long network names.
 - **MQTT Connectivity**:
-  - After provisioning, the device connects to the configured Wi-Fi network.
-  - It performs an internet connectivity check by resolving `google.com`.
-  - It connects to the public HiveMQ MQTT broker (`broker.hivemq.com`) and is ready to send and receive data.
-- **Persistent Configuration**:
-  - The firmware is currently configured to always start in provisioning mode for development purposes.
-- **ARGB LED Status Indicator**:
-  - The onboard ARGB LED provides a visual indication of the device's status:
+  - After provisioning, the device connects to the configured Wi-Fi network and MQTT broker.
+- **Enhanced LED Status Indicator**:
+  - The onboard ARGB LED provides a detailed visual indication of the device's status:
     - **White:** Provisioning mode
     - **Blue:** Connecting to Wi-Fi
-    - **Green:** Connected to Wi-Fi and MQTT
-    - **Red:** Error state (e.g., Wi-Fi or MQTT connection failed)
+    - **Yellow:** Wi-Fi connected, but MQTT is disconnected or has an error.
+    - **Green:** Fully connected to Wi-Fi and MQTT.
+    - **Flashing White:** A telemetry message has just been published.
+    - **Red:** Wi-Fi connection failed.
 
 ## Getting Started
 
