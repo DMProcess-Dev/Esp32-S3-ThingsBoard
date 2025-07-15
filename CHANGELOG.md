@@ -8,4 +8,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### 🔧 Miscellaneous
+- Add initial project structure and documentation
 - **(setup)**: Verify ESP-IDF toolchain and board communication
