@@ -1,1 +1,24 @@
-settings.json
+# CMake files
+/build
+/build-cmake
+/project_elf_src_esp32.c
+
+# SDK configuration files
+/sdkconfig
+/sdkconfig.old
+/sdkconfig.bak
+
+# IDE and editor files
+/.vscode/
+/.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+# Python files
+*.pyc
+*.pyd
+__pycache__/
