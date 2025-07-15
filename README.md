@@ -62,10 +62,43 @@ This project includes a `docker-compose.yml` file to deploy a **secure** Eclipse
 First, clone this project onto your remote server. Then, create the necessary directory structure for Mosquitto.
 
 ```bash
-mkdir -p thingsboard/mosquitto/{config,data,log}
+mkdir -p thingsboard/mosquitto/{config,data,log,certs}
 ```
 
-### 2. Create Secure Configuration File
+### 2. Generate TLS Certificates
+
+To use secure MQTTS, you must generate a set of TLS certificates. The following commands will create a simple Certificate Authority (CA) and use it to sign a server certificate.
+
+**Note:** Run these commands from the project root on your remote server.
+
+**a. Generate the CA private key:**
+```bash
+openssl genrsa -out thingsboard/mosquitto/certs/ca.key 2048
+```
+
+**b. Generate the self-signed CA certificate:**
+(You can press Enter through all the prompts for company name, etc.)
+```bash
+openssl req -new -x509 -days 3650 -key thingsboard/mosquitto/certs/ca.key -out thingsboard/mosquitto/certs/ca.crt
+```
+
+**c. Generate the server's private key:**
+```bash
+openssl genrsa -out thingsboard/mosquitto/certs/server.key 2048
+```
+
+**d. Generate a certificate signing request (CSR) for the server:**
+**Important:** When prompted for the "Common Name", you **must** enter your server's public IP address (e.g., `193.164.4.51`) or its domain name.
+```bash
+openssl req -new -out thingsboard/mosquitto/certs/server.csr -key thingsboard/mosquitto/certs/server.key
+```
+
+**e. Sign the server certificate with your CA:**
+```bash
+openssl x509 -req -in thingsboard/mosquitto/certs/server.csr -CA thingsboard/mosquitto/certs/ca.crt -CAkey thingsboard/mosquitto/certs/ca.key -CAcreateserial -out thingsboard/mosquitto/certs/server.crt -days 365
+```
+
+### 3. Create Secure Configuration File
 
 Create the Mosquitto configuration file using an editor like `nano`:
 ```bash
