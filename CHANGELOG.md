@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### ✨ Features
+- **(mqtt, security)**: Implement SSL certificate verification for secure MQTTS connections
 - **(ui, led)**: Improve LED feedback and provisioning UI ([e8b9baa](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/e8b9baa))
 - **(chore)**: Add remote mqtt broker and update firmware ([4296abc](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/4296abc))
 - **(provisioning)**: Implement web-based Wi-Fi provisioning with network scanning ([9e2e485](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/9e2e485))

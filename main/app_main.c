@@ -22,6 +22,7 @@
 #include "esp_http_server.h"
 #include "provisioning_page.h"
 #include "sys/param.h"
+#include <math.h>
 #include "cJSON.h"
 #include "netdb.h"
 #include "driver/temperature_sensor.h"
@@ -30,7 +31,7 @@
 #include "led_strip.h"
 
 #define ARGB_LED_GPIO 48
-#define MAX_BRIGHTNESS 50 // 0-255
+#define MAX_BRIGHTNESS 25 // 0-255
 
 static led_strip_handle_t s_led_strip;
 
@@ -92,8 +93,9 @@ static void telemetry_task(void *pvParameters)
         uint32_t free_heap = esp_get_free_heap_size();
         int64_t uptime = esp_timer_get_time() / 1000000; // seconds
 
-        // Get temperature
+        // Get temperature and round to two decimal places
         ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &temperature));
+        temperature = roundf(temperature * 100.0) / 100.0;
 
         // Get RSSI
         if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
@@ -112,7 +114,12 @@ static void telemetry_task(void *pvParameters)
         cJSON_Delete(root);
         free(json_payload);
 
-        vTaskDelay(pdMS_TO_TICKS(5000)); // 5 seconds
+        // Blink LED to indicate successful publish
+        set_led_status(255, 255, 255); // White
+        vTaskDelay(pdMS_TO_TICKS(500));
+        set_led_status(0, 255, 0); // Green
+
+        vTaskDelay(pdMS_TO_TICKS(4500)); // Adjust to make total delay 5 seconds
     }
 }
 
@@ -129,14 +136,14 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
-        set_led_status(255, 0, 0); // Red for error
+        set_led_status(255, 255, 0); // Yellow for MQTT disconnected
         break;
     case MQTT_EVENT_PUBLISHED:
         ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
         break;
     case MQTT_EVENT_ERROR:
         ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
-        set_led_status(255, 0, 0); // Red for error
+        set_led_status(255, 255, 0); // Yellow for MQTT error
         if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
             log_error_if_nonzero("reported from esp-tls", event->error_handle->esp_tls_last_esp_err);
             log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
@@ -173,10 +180,33 @@ void mqtt_app_start(void)
     nvs_close(nvs_handle);
 
     char uri[128];
-    snprintf(uri, sizeof(uri), "mqtt://%s:%s", mqtt_host, mqtt_port_str);
+    snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, "8883"); // Use port 8883 for MQTTS
+
+    const char *ca_cert = "-----BEGIN CERTIFICATE-----\n"
+                          "MIIDizCCAnOgAwIBAgIUbQWnmmWcibAjdXSGTkCNHFlSp6AwDQYJKoZIhvcNAQEL\n"
+                          "BQAwVTELMAkGA1UEBhMCVVMxDjAMBgNVBAgMBVN0YXRlMQ0wCwYDVQQHDARDaXR5\n"
+                          "MRUwEwYDVQQKDAxPcmdhbml6YXRpb24xEDAOBgNVBAMMB01RVFQtQ0EwHhcNMjUw\n"
+                          "NzE1MjE0NzUwWhcNMjYwNzE1MjE0NzUwWjBVMQswCQYDVQQGEwJVUzEOMAwGA1UE\n"
+                          "CAwFU3RhdGUxDTALBgNVBAcMBENpdHkxFTATBgNVBAoMDE9yZ2FuaXphdGlvbjEQ\n"
+                          "MA4GA1UEAwwHTVFUVC1DQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB\n"
+                          "AIzn6YZ9XmNq6ziQe9s0gEzvy/ulHgtE9dzlQTXbuloI8o5EDX4TDIuF7ijgGxIj\n"
+                          "PBugxtjBA2cmw8RwlLVWiNqBwVaoxE1a30OL6errTJLzIwGbVz4I7N7afvfSvT5O\n"
+                          "F4cx5UGOIC2pZlNxNpqpMcpZryPt6pmVBRtR2q66TrkbOPLTTij2UUcvzQJHDDNx\n"
+                          "01SbFBvaFWTM7NpI3beeXVNpQ+A7o2lhWbMYO468eJA5PuX615mrp+hbXB7wiGN/\n"
+                          "wuLl8rcBMA15JUDiUntfdCFVSszJyw2e6AQnUCFf5kaihy3Kf/Eh61ACOGEBxoPn\n"
+                          "dDyvHBRlumLJZTZWka4UOFkCAwEAAaNTMFEwHQYDVR0OBBYEFFmLyOCgVpnH6oMJ\n"
+                          "sL2ESvFpUeZCMB8GA1UdIwQYMBaAFFmLyOCgVpnH6oMJsL2ESvFpUeZCMA8GA1Ud\n"
+                          "EwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAC8tXrFXnptWfaavQPsakQ8w\n"
+                          "spkHvCV1t0YBT2w/fCwS/XH84pOqxj67qeDs4cj9dKnbf1bG6PUmuH/Fi/lK5HEW\n"
+                          "pU1kHbj3hV9qHERp5dtxBVNqYIMAmoSrspI72fHGNNFCYebdsuhcnXLI4UGRlmt1\n"
+                          "0SU/CFdM/S86aArlb48DCebhTY1WnNPD7oDmlURv6JBmnm2KqgN6KVEjp3cQBGMh\n"
+                          "btTQPvvU6WGTiFv74WHbvfQxz/hX2mVkJDomjU79EeejUXzkTClB2PTyRTQaIvWH\n"
+                          "EtepHpNKigkheeDUZQbe5mGyE9JSbWltJqSIJw+FFJvv20tyDnP3V1kdNjjaG7s=\n"
+                          "-----END CERTIFICATE-----";
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = uri,
+        .broker.verification.certificate = ca_cert,
         .credentials.username = mqtt_user,
         .credentials.authentication.password = mqtt_pass,
     };
@@ -279,11 +309,6 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 httpd_handle_t server = NULL;
 
-
-
-
-
-
 static esp_err_t connect_post_handler(httpd_req_t *req)
 {
     char buf[512];
@@ -354,7 +379,6 @@ static esp_err_t connect_post_handler(httpd_req_t *req)
 
     return ESP_OK;
 }
-
 
 static httpd_handle_t start_webserver(void)
 {
@@ -443,7 +467,6 @@ static void start_provisioning_server(void)
 
     start_webserver();
 }
-
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)

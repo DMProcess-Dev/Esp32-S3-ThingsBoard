@@ -120,14 +120,16 @@ static const char provisioning_html[] = R"rawliteral(
         display: flex;
         justify-content: space-between;
         align-items: center;
+        gap: 1rem; /* Add spacing */
     }
-    #wifi-list li:last-child {
-        border-bottom: none;
-    }
-    #wifi-list li:hover {
-        background-color: var(--bg-color);
+    .wifi-ssid {
+        flex-grow: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .wifi-signal {
+        flex-shrink: 0; /* Prevent this from shrinking */
         font-weight: normal;
         color: var(--secondary-color);
     }
@@ -151,7 +153,7 @@ static const char provisioning_html[] = R"rawliteral(
             <form action="/connect" method="post">
                 <h2>Wi-Fi</h2>
                 <label for="ssid">SSID</label>
-                <input type="text" id="ssid" name="ssid" required autocomplete="off">
+                <input type="text" id="ssid" name="ssid" required autocomplete="off" value="Oruc">
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" autocomplete="off">
                 <hr>
@@ -161,9 +163,9 @@ static const char provisioning_html[] = R"rawliteral(
                 <label for="mqtt_port">Port</label>
                 <input type="text" id="mqtt_port" name="mqtt_port" value="1883">
                 <label for="mqtt_user">Username</label>
-                <input type="text" id="mqtt_user" name="mqtt_user" autocomplete="off">
+                <input type="text" id="mqtt_user" name="mqtt_user" autocomplete="off" value="esp32-device">
                 <label for="mqtt_pass">Password</label>
-                <input type="password" id="mqtt_pass" name="mqtt_pass" autocomplete="off">
+                <input type="password" id="mqtt_pass" name="mqtt_pass" autocomplete="off" value="esp32-password">
                 <input type="submit" value="Connect">
             </form>
             <div id="status-container" style="display: none;">
@@ -211,7 +213,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     data.forEach(net => {
                         const listItem = document.createElement('li');
                         listItem.classList.add('wifi-item');
-                        listItem.innerHTML = `<span>${net.ssid}</span><span class="wifi-signal">${net.rssi} dBm, ${getAuthModeString(net.authmode)}</span>`;
+                        listItem.innerHTML = `<span class="wifi-ssid">${net.ssid}</span><span class="wifi-signal">${net.rssi} dBm, ${getAuthModeString(net.authmode)}</span>`;
                         listItem.addEventListener('click', () => {
                             ssidInput.value = net.ssid;
                         });

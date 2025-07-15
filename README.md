@@ -10,8 +10,10 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
   - Navigate to `http://192.168.4.1`. The page comes pre-filled with default credentials for quick setup.
 - **Dynamic Wi-Fi Scanning**:
   - The provisioning page includes a "Scan for Networks" button with an improved UI that gracefully handles long network names.
-- **MQTT Connectivity**:
+- **Secure MQTT Connectivity**:
   - After provisioning, the device connects to the configured Wi-Fi network and MQTT broker.
+  - **SSL/TLS Support**: Full SSL certificate verification for secure MQTTS connections on port 8883.
+  - **Certificate Validation**: Proper CA certificate verification ensures secure communication.
 - **Enhanced LED Status Indicator**:
   - The onboard ARGB LED provides a detailed visual indication of the device's status:
     - **White:** Provisioning mode
