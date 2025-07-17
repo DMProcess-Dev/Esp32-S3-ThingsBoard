@@ -28,6 +28,7 @@
 #include "driver/temperature_sensor.h"
 #include "esp_timer.h"
 #include "driver/gpio.h"
+#include "esp_tls.h"
 #include "led_strip.h"
 
 #define ARGB_LED_GPIO 48
@@ -74,7 +75,6 @@ static void log_error_if_nonzero(const char *message, int error_code)
  * @param event_id The id for the received event.
  * @param event_data The data for the event, esp_mqtt_event_handle_t.
  */
-#define LED_GPIO 48
 
 static void telemetry_task(void *pvParameters)
 {
@@ -142,9 +142,14 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
         break;
     case MQTT_EVENT_ERROR:
-        ESP_LOGI(TAG, "MQTT_EVENT_ERROR");
+        ESP_LOGE(TAG, "MQTT_EVENT_ERROR");
         set_led_status(255, 255, 0); // Yellow for MQTT error
         if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
+            // Enhanced SSL error handling
+            if (event->error_handle->esp_tls_last_esp_err != ESP_OK) {
+                ESP_LOGE(TAG, "SSL/TLS error occurred - error code: 0x%x", event->error_handle->esp_tls_last_esp_err);
+                ESP_LOGE(TAG, "Check certificate validity, expiration, and CA certificate match");
+            }
             log_error_if_nonzero("reported from esp-tls", event->error_handle->esp_tls_last_esp_err);
             log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
             log_error_if_nonzero("captured as transport's socket errno",  event->error_handle->esp_transport_sock_errno);
@@ -155,6 +160,71 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
         ESP_LOGI(TAG, "Other event id:%d", event->event_id);
         break;
     }
+}
+
+/**
+ * @brief Check if Wi-Fi credentials exist in NVS
+ * 
+ * @return bool true if Wi-Fi credentials are stored, false otherwise
+ */
+bool wifi_credentials_exist(void) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("wifi_creds", NVS_READONLY, &nvs_handle);
+    if (err != ESP_OK) {
+        return false;
+    }
+    
+    size_t ssid_len = 0;
+    err = nvs_get_str(nvs_handle, "ssid", NULL, &ssid_len);
+    nvs_close(nvs_handle);
+    
+    return (err == ESP_OK && ssid_len > 0);
+}
+
+
+/**
+ * @brief Check if CA certificate exists in NVS
+ * 
+ * @return bool true if certificate exists, false otherwise
+ */
+bool certificate_exists_in_nvs(void) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("security", NVS_READONLY, &nvs_handle);
+    if (err != ESP_OK) {
+        return false;
+    }
+    
+    size_t cert_len = 0;
+    err = nvs_get_str(nvs_handle, "ca_cert", NULL, &cert_len);
+    nvs_close(nvs_handle);
+    
+    return (err == ESP_OK && cert_len > 0);
+}
+
+/**
+ * @brief Store CA certificate in NVS for future use
+ * 
+ * @param certificate PEM formatted certificate string
+ * @return esp_err_t ESP_OK on success
+ */
+esp_err_t store_ca_certificate(const char* certificate) {
+    nvs_handle_t nvs_handle;
+    esp_err_t err = nvs_open("security", NVS_READWRITE, &nvs_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to open NVS for certificate storage");
+        return err;
+    }
+    
+    err = nvs_set_str(nvs_handle, "ca_cert", certificate);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to store certificate in NVS");
+    } else {
+        ESP_LOGI(TAG, "CA certificate stored in NVS successfully");
+        nvs_commit(nvs_handle);
+    }
+    
+    nvs_close(nvs_handle);
+    return err;
 }
 
 void mqtt_app_start(void)
@@ -180,29 +250,44 @@ void mqtt_app_start(void)
     nvs_close(nvs_handle);
 
     char uri[128];
-    snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, "8883"); // Use port 8883 for MQTTS
+    snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, mqtt_port_str); // Use configured port for MQTTS
 
-    const char *ca_cert = "-----BEGIN CERTIFICATE-----\n"
-                          "MIIDizCCAnOgAwIBAgIUbQWnmmWcibAjdXSGTkCNHFlSp6AwDQYJKoZIhvcNAQEL\n"
-                          "BQAwVTELMAkGA1UEBhMCVVMxDjAMBgNVBAgMBVN0YXRlMQ0wCwYDVQQHDARDaXR5\n"
-                          "MRUwEwYDVQQKDAxPcmdhbml6YXRpb24xEDAOBgNVBAMMB01RVFQtQ0EwHhcNMjUw\n"
-                          "NzE1MjE0NzUwWhcNMjYwNzE1MjE0NzUwWjBVMQswCQYDVQQGEwJVUzEOMAwGA1UE\n"
-                          "CAwFU3RhdGUxDTALBgNVBAcMBENpdHkxFTATBgNVBAoMDE9yZ2FuaXphdGlvbjEQ\n"
-                          "MA4GA1UEAwwHTVFUVC1DQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB\n"
-                          "AIzn6YZ9XmNq6ziQe9s0gEzvy/ulHgtE9dzlQTXbuloI8o5EDX4TDIuF7ijgGxIj\n"
-                          "PBugxtjBA2cmw8RwlLVWiNqBwVaoxE1a30OL6errTJLzIwGbVz4I7N7afvfSvT5O\n"
-                          "F4cx5UGOIC2pZlNxNpqpMcpZryPt6pmVBRtR2q66TrkbOPLTTij2UUcvzQJHDDNx\n"
-                          "01SbFBvaFWTM7NpI3beeXVNpQ+A7o2lhWbMYO468eJA5PuX615mrp+hbXB7wiGN/\n"
-                          "wuLl8rcBMA15JUDiUntfdCFVSszJyw2e6AQnUCFf5kaihy3Kf/Eh61ACOGEBxoPn\n"
-                          "dDyvHBRlumLJZTZWka4UOFkCAwEAAaNTMFEwHQYDVR0OBBYEFFmLyOCgVpnH6oMJ\n"
-                          "sL2ESvFpUeZCMB8GA1UdIwQYMBaAFFmLyOCgVpnH6oMJsL2ESvFpUeZCMA8GA1Ud\n"
-                          "EwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAC8tXrFXnptWfaavQPsakQ8w\n"
-                          "spkHvCV1t0YBT2w/fCwS/XH84pOqxj67qeDs4cj9dKnbf1bG6PUmuH/Fi/lK5HEW\n"
-                          "pU1kHbj3hV9qHERp5dtxBVNqYIMAmoSrspI72fHGNNFCYebdsuhcnXLI4UGRlmt1\n"
-                          "0SU/CFdM/S86aArlb48DCebhTY1WnNPD7oDmlURv6JBmnm2KqgN6KVEjp3cQBGMh\n"
-                          "btTQPvvU6WGTiFv74WHbvfQxz/hX2mVkJDomjU79EeejUXzkTClB2PTyRTQaIvWH\n"
-                          "EtepHpNKigkheeDUZQbe5mGyE9JSbWltJqSIJw+FFJvv20tyDnP3V1kdNjjaG7s=\n"
-                          "-----END CERTIFICATE-----";
+    // Load CA certificate from NVS (try security namespace first, then wifi_creds)
+    static char ca_cert[2048];
+    size_t cert_len = sizeof(ca_cert);
+    esp_err_t cert_err = ESP_FAIL;
+    
+    // Try loading from security namespace first
+    nvs_handle_t security_handle;
+    if (nvs_open("security", NVS_READONLY, &security_handle) == ESP_OK) {
+        cert_err = nvs_get_str(security_handle, "ca_cert", ca_cert, &cert_len);
+        nvs_close(security_handle);
+        if (cert_err == ESP_OK) {
+            ESP_LOGI(TAG, "CA certificate loaded from security NVS namespace");
+        }
+    }
+    
+    // Fallback to wifi_creds namespace
+    if (cert_err != ESP_OK) {
+        if (nvs_open("wifi_creds", NVS_READONLY, &nvs_handle) == ESP_OK) {
+            cert_len = sizeof(ca_cert);
+            cert_err = nvs_get_str(nvs_handle, "ca_cert", ca_cert, &cert_len);
+            nvs_close(nvs_handle);
+            if (cert_err == ESP_OK) {
+                ESP_LOGI(TAG, "CA certificate loaded from wifi_creds NVS namespace");
+            }
+        }
+    }
+    
+    // No fallback mechanism - certificate must be stored in NVS
+    if (cert_err != ESP_OK) {
+        ESP_LOGE(TAG, "CRITICAL: CA certificate not found in NVS! SSL connection will fail.");
+        ESP_LOGE(TAG, "Please store the CA certificate using store_ca_certificate() function");
+        set_led_status(255, 0, 0); // Red LED to indicate error
+        return; // Exit without starting MQTT client
+    }
+    
+    ESP_LOGI(TAG, "CA certificate successfully loaded from NVS");
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = uri,
@@ -279,6 +364,45 @@ typedef enum {
 } connection_status_t;
 
 static connection_status_t s_connection_status = STATUS_IDLE;
+
+/**
+ * @brief Initialize Wi-Fi station with stored credentials
+ */
+void wifi_init_sta(void) {
+    // Initialize Wi-Fi
+    esp_netif_create_default_wifi_sta();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    // Load credentials from NVS
+    nvs_handle_t nvs_handle;
+    ESP_ERROR_CHECK(nvs_open("wifi_creds", NVS_READONLY, &nvs_handle));
+
+    char ssid[32];
+    char password[64];
+    size_t len;
+
+    len = sizeof(ssid);
+    ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "ssid", ssid, &len));
+    len = sizeof(password);
+    esp_err_t pwd_err = nvs_get_str(nvs_handle, "password", password, &len);
+    if (pwd_err != ESP_OK) {
+        password[0] = '\0';  // Empty password if not found
+    }
+
+    nvs_close(nvs_handle);
+
+    // Configure Wi-Fi Station with stored credentials
+    wifi_config_t wifi_config = {0};
+    strlcpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid));
+    strlcpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password));
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_LOGI(TAG, "Connecting to stored Wi-Fi network: %s", ssid);
+}
 
 static esp_err_t status_get_handler(httpd_req_t *req)
 {
@@ -529,10 +653,54 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
+    // Initialize ThingsBoard/Mosquitto CA certificate for SSL/TLS connections
+    const char* ca_certificate = 
+        "-----BEGIN CERTIFICATE-----\n"
+        "MIIDizCCAnOgAwIBAgIUbQWnmmWcibAjdXSGTkCNHFlSp6AwDQYJKoZIhvcNAQEL\n"
+        "BQAwVTELMAkGA1UEBhMCVVMxDjAMBgNVBAgMBVN0YXRlMQ0wCwYDVQQHDARDaXR5\n"
+        "MRUwEwYDVQQKDAxPcmdhbml6YXRpb24xEDAOBgNVBAMMB01RVFQtQ0EwHhcNMjUw\n"
+        "NzE1MjE0NzUwWhcNMjYwNzE1MjE0NzUwWjBVMQswCQYDVQQGEwJVUzEOMAwGA1UE\n"
+        "CAwFU3RhdGUxDTALBgNVBAcMBENpdHkxFTATBgNVBAoMDE9yZ2FuaXphdGlvbjEQ\n"
+        "MA4GA1UEAwwHTVFUVC1DQTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEB\n"
+        "AIzn6YZ9XmNq6ziQe9s0gEzvy/ulHgtE9dzlQTXbuloI8o5EDX4TDIuF7ijgGxIj\n"
+        "PBugxtjBA2cmw8RwlLVWiNqBwVaoxE1a30OL6errTJLzIwGbVz4I7N7afvfSvT5O\n"
+        "F4cx5UGOIC2pZlNxNpqpMcpZryPt6pmVBRtR2q66TrkbOPLTTij2UUcvzQJHDDNx\n"
+        "01SbFBvaFWTM7NpI3beeXVNpQ+A7o2lhWbMYO468eJA5PuX615mrp+hbXB7wiGN/\n"
+        "wuLl8rcBMA15JUDiUntfdCFVSszJyw2e6AQnUCFf5kaihy3Kf/Eh61ACOGEBxoPn\n"
+        "dDyvHBRlumLJZTZWka4UOFkCAwEAAaNTMFEwHQYDVR0OBBYEFFmLyOCgVpnH6oMJ\n"
+        "sL2ESvFpUeZCMB8GA1UdIwQYMBaAFFmLyOCgVpnH6oMJsL2ESvFpUeZCMA8GA1Ud\n"
+        "EwEB/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBAC8tXrFXnptWfaavQPsakQ8w\n"
+        "spkHvCV1t0YBT2w/fCwS/XH84pOqxj67qeDs4cj9dKnbf1bG6PUmuH/Fi/lK5HEW\n"
+        "pU1kHbj3hV9qHERp5dtxBVNqYIMAmoSrspI72fHGNNFCYebdsuhcnXLI4UGRlmt1\n"
+        "0SU/CFdM/S86aArlb48DCebhTY1WnNPD7oDmlURv6JBmnm2KqgN6KVEjp3cQBGMh\n"
+        "btTQPvvU6WGTiFv74WHbvfQxz/hX2mVkJDomjU79EeejUXzkTClB2PTyRTQaIvWH\n"
+        "EtepHpNKigkheeDUZQbe5mGyE9JSbWltJqSIJw+FFJvv20tyDnP3V1kdNjjaG7s=\n"
+        "-----END CERTIFICATE-----\n";
+    
+    // Check if CA certificate already exists in NVS, only store if missing
+    if (!certificate_exists_in_nvs()) {
+        ESP_LOGI(TAG, "CA certificate not found in NVS, initializing...");
+        esp_err_t cert_err = store_ca_certificate(ca_certificate);
+        if (cert_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to store CA certificate: %s", esp_err_to_name(cert_err));
+        } else {
+            ESP_LOGI(TAG, "ThingsBoard/Mosquitto CA certificate initialized successfully");
+        }
+    } else {
+        ESP_LOGI(TAG, "CA certificate already exists in NVS, skipping initialization");
+    }
+
     init_led();
 
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
 
-    start_provisioning_server();
+    // Smart boot: Check if Wi-Fi credentials are stored
+    if (!wifi_credentials_exist()) {
+        ESP_LOGI(TAG, "No Wi-Fi credentials found, starting provisioning mode");
+        start_provisioning_server();
+    } else {
+        ESP_LOGI(TAG, "Wi-Fi credentials found, connecting directly");
+        wifi_init_sta();
+    }
 }
