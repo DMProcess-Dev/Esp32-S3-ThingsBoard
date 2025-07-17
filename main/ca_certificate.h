@@ -23,7 +23,6 @@
  * 
  * @note This is a development certificate and should be replaced in production
  */
-extern const char* const DEMO_CA_CERTIFICATE;
 
 #define DEMO_CA_CERTIFICATE_PEM \
     "-----BEGIN CERTIFICATE-----\n" \

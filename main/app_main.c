@@ -31,11 +31,29 @@
 #include "esp_tls.h"
 #include "led_strip.h"
 #include "ca_certificate.h"
+#include "certificate_manager.h"
 
 #define ARGB_LED_GPIO 48
-#define MAX_BRIGHTNESS 25 // 0-255
+#define DEFAULT_LED_BRIGHTNESS 25   // Default brightness level (0-255)
+#define MAX_LED_BRIGHTNESS 255       // Maximum possible brightness
+#define HTTP_CONTENT_BUFFER_SIZE 512 // HTTP POST content buffer
 
 static led_strip_handle_t s_led_strip;
+
+// LED color management system
+typedef struct {
+    uint8_t red;
+    uint8_t green;
+    uint8_t blue;
+} led_color_t;
+
+// LED color constants
+static const led_color_t LED_COLOR_RED     = {255, 0, 0};
+static const led_color_t LED_COLOR_GREEN   = {0, 255, 0};
+static const led_color_t LED_COLOR_BLUE    = {0, 0, 255};
+static const led_color_t LED_COLOR_WHITE   = {255, 255, 255};
+static const led_color_t LED_COLOR_YELLOW  = {255, 255, 0};
+static const led_color_t LED_COLOR_PROVISIONING = {50, 50, 50}; // Dim white for provisioning mode
 
 static void init_led(void)
 {
@@ -50,11 +68,15 @@ static void init_led(void)
     led_strip_clear(s_led_strip);
 }
 
-static void set_led_status(uint32_t red, uint32_t green, uint32_t blue)
+static void set_led_color(const led_color_t *color)
 {
-    led_strip_set_pixel(s_led_strip, 0, (red * MAX_BRIGHTNESS) / 255, (green * MAX_BRIGHTNESS) / 255, (blue * MAX_BRIGHTNESS) / 255);
+    led_strip_set_pixel(s_led_strip, 0, 
+                        (color->red * DEFAULT_LED_BRIGHTNESS) / MAX_LED_BRIGHTNESS,
+                        (color->green * DEFAULT_LED_BRIGHTNESS) / MAX_LED_BRIGHTNESS,
+                        (color->blue * DEFAULT_LED_BRIGHTNESS) / MAX_LED_BRIGHTNESS);
     led_strip_refresh(s_led_strip);
 }
+
 
 static const char *TAG = "PROVISIONING_EXAMPLE";
 
@@ -116,9 +138,9 @@ static void telemetry_task(void *pvParameters)
         free(json_payload);
 
         // Blink LED to indicate successful publish
-        set_led_status(255, 255, 255); // White
+        set_led_color(&LED_COLOR_WHITE);
         vTaskDelay(pdMS_TO_TICKS(500));
-        set_led_status(0, 255, 0); // Green
+        set_led_color(&LED_COLOR_GREEN);
 
         vTaskDelay(pdMS_TO_TICKS(4500)); // Adjust to make total delay 5 seconds
     }
@@ -132,19 +154,19 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     switch ((esp_mqtt_event_id_t)event_id) {
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-        set_led_status(0, 255, 0); // Green for MQTT connected
+        set_led_color(&LED_COLOR_GREEN);
         xTaskCreate(telemetry_task, "telemetry_task", 4096, client, 5, NULL);
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
-        set_led_status(255, 255, 0); // Yellow for MQTT disconnected
+        set_led_color(&LED_COLOR_YELLOW);
         break;
     case MQTT_EVENT_PUBLISHED:
         ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
         break;
     case MQTT_EVENT_ERROR:
         ESP_LOGE(TAG, "MQTT_EVENT_ERROR");
-        set_led_status(255, 255, 0); // Yellow for MQTT error
+        set_led_color(&LED_COLOR_YELLOW);
         if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
             // Enhanced SSL error handling
             if (event->error_handle->esp_tls_last_esp_err != ESP_OK) {
@@ -168,7 +190,7 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
  * 
  * @return bool true if Wi-Fi credentials are stored, false otherwise
  */
-bool wifi_credentials_exist(void) {
+static bool wifi_credentials_exist(void) {
     nvs_handle_t nvs_handle;
     esp_err_t err = nvs_open("wifi_creds", NVS_READONLY, &nvs_handle);
     if (err != ESP_OK) {
@@ -183,52 +205,8 @@ bool wifi_credentials_exist(void) {
 }
 
 
-/**
- * @brief Check if CA certificate exists in NVS
- * 
- * @return bool true if certificate exists, false otherwise
- */
-bool certificate_exists_in_nvs(void) {
-    nvs_handle_t nvs_handle;
-    esp_err_t err = nvs_open("security", NVS_READONLY, &nvs_handle);
-    if (err != ESP_OK) {
-        return false;
-    }
-    
-    size_t cert_len = 0;
-    err = nvs_get_str(nvs_handle, "ca_cert", NULL, &cert_len);
-    nvs_close(nvs_handle);
-    
-    return (err == ESP_OK && cert_len > 0);
-}
 
-/**
- * @brief Store CA certificate in NVS for future use
- * 
- * @param certificate PEM formatted certificate string
- * @return esp_err_t ESP_OK on success
- */
-esp_err_t store_ca_certificate(const char* certificate) {
-    nvs_handle_t nvs_handle;
-    esp_err_t err = nvs_open("security", NVS_READWRITE, &nvs_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to open NVS for certificate storage");
-        return err;
-    }
-    
-    err = nvs_set_str(nvs_handle, "ca_cert", certificate);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to store certificate in NVS");
-    } else {
-        ESP_LOGI(TAG, "CA certificate stored in NVS successfully");
-        nvs_commit(nvs_handle);
-    }
-    
-    nvs_close(nvs_handle);
-    return err;
-}
-
-void mqtt_app_start(void)
+static void mqtt_app_start(void)
 {
     nvs_handle_t nvs_handle;
     ESP_ERROR_CHECK(nvs_open("wifi_creds", NVS_READONLY, &nvs_handle));
@@ -253,42 +231,33 @@ void mqtt_app_start(void)
     char uri[128];
     snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, mqtt_port_str); // Use configured port for MQTTS
 
-    // Load CA certificate from NVS (try security namespace first, then wifi_creds)
+    // Load CA certificate using certificate manager
     static char ca_cert[2048];
     size_t cert_len = sizeof(ca_cert);
-    esp_err_t cert_err = ESP_FAIL;
     
-    // Try loading from security namespace first
-    nvs_handle_t security_handle;
-    if (nvs_open("security", NVS_READONLY, &security_handle) == ESP_OK) {
-        cert_err = nvs_get_str(security_handle, "ca_cert", ca_cert, &cert_len);
-        nvs_close(security_handle);
-        if (cert_err == ESP_OK) {
-            ESP_LOGI(TAG, "CA certificate loaded from security NVS namespace");
-        }
-    }
-    
-    // Fallback to wifi_creds namespace
+    esp_err_t cert_err = cert_manager_load(ca_cert, cert_len, &cert_len);
     if (cert_err != ESP_OK) {
-        if (nvs_open("wifi_creds", NVS_READONLY, &nvs_handle) == ESP_OK) {
-            cert_len = sizeof(ca_cert);
-            cert_err = nvs_get_str(nvs_handle, "ca_cert", ca_cert, &cert_len);
-            nvs_close(nvs_handle);
-            if (cert_err == ESP_OK) {
-                ESP_LOGI(TAG, "CA certificate loaded from wifi_creds NVS namespace");
-            }
-        }
-    }
-    
-    // No fallback mechanism - certificate must be stored in NVS
-    if (cert_err != ESP_OK) {
-        ESP_LOGE(TAG, "CRITICAL: CA certificate not found in NVS! SSL connection will fail.");
-        ESP_LOGE(TAG, "Please store the CA certificate using store_ca_certificate() function");
-        set_led_status(255, 0, 0); // Red LED to indicate error
+        ESP_LOGE(TAG, "CRITICAL: Failed to load CA certificate from certificate manager!");
+        ESP_LOGE(TAG, "Recovery options:");
+        ESP_LOGE(TAG, "1. Run 'idf.py erase-flash' and reflash firmware to reinitialize certificates");
+        ESP_LOGE(TAG, "2. Provision certificate via secure endpoint using cert_manager_store()");
+        ESP_LOGE(TAG, "3. Check certificate expiration and validity");
+        ESP_LOGE(TAG, "4. Verify NVS partition is not corrupted");
+        ESP_LOGE(TAG, "5. Consult troubleshooting guide in project documentation");
+        set_led_color(&LED_COLOR_RED);
         return; // Exit without starting MQTT client
     }
     
-    ESP_LOGI(TAG, "CA certificate successfully loaded from NVS");
+    // Display certificate metadata for debugging
+    cert_metadata_t metadata;
+    if (cert_manager_get_metadata(&metadata) == ESP_OK) {
+        ESP_LOGI(TAG, "Certificate loaded successfully:");
+        ESP_LOGI(TAG, "  - Source: %s", cert_manager_get_source_name(metadata.source));
+        ESP_LOGI(TAG, "  - Size: %d bytes", metadata.cert_size);
+        ESP_LOGI(TAG, "  - Valid: %s", metadata.is_valid ? "yes" : "no");
+    } else {
+        ESP_LOGI(TAG, "CA certificate loaded successfully (no metadata available)");
+    }
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = uri,
@@ -369,7 +338,7 @@ static connection_status_t s_connection_status = STATUS_IDLE;
 /**
  * @brief Initialize Wi-Fi station with stored credentials
  */
-void wifi_init_sta(void) {
+static void wifi_init_sta(void) {
     // Initialize Wi-Fi
     esp_netif_create_default_wifi_sta();
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
@@ -558,7 +527,7 @@ static httpd_handle_t start_webserver(void)
 static void start_provisioning_server(void)
 {
     ESP_LOGI(TAG, "Starting provisioning mode");
-    set_led_status(50, 50, 50); // White for provisioning
+    set_led_color(&LED_COLOR_PROVISIONING);
 
     esp_netif_create_default_wifi_ap();
     esp_netif_create_default_wifi_sta();
@@ -597,18 +566,18 @@ static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        set_led_status(0, 0, 255); // Blue for connecting
+        set_led_color(&LED_COLOR_BLUE);
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGI(TAG, "Disconnected from Wi-Fi, trying to reconnect...");
         s_connection_status = STATUS_CONNECT_FAILED;
-        set_led_status(255, 0, 0); // Red for error
+        set_led_color(&LED_COLOR_RED);
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "Got IP:" IPSTR, IP2STR(&event->ip_info.ip));
         s_connection_status = STATUS_CONNECTED;
-        set_led_status(0, 255, 0); // Green for connected
+        set_led_color(&LED_COLOR_GREEN);
 
         // Stop the provisioning AP and webserver
         esp_wifi_set_mode(WIFI_MODE_STA);
@@ -626,7 +595,7 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         int err = getaddrinfo("www.google.com", "80", &hints, &res);
         if(err != 0 || res == NULL) {
             ESP_LOGE(TAG, "Internet connectivity check failed. DNS lookup for google.com failed.");
-            set_led_status(255, 0, 0); // Red for error
+            set_led_color(&LED_COLOR_RED);
         } else {
             ESP_LOGI(TAG, "Internet connectivity check successful.");
             freeaddrinfo(res);
@@ -654,21 +623,29 @@ void app_main(void)
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // Initialize ThingsBoard/Mosquitto CA certificate for SSL/TLS connections
-    // NOTE: For production use, certificates should be provisioned securely
-    const char* ca_certificate = DEMO_CA_CERTIFICATE_PEM;
+    // Initialize certificate manager for secure certificate provisioning
+    cert_manager_config_t cert_config = CERT_MANAGER_DEFAULT_CONFIG();
+    cert_config.nvs_namespace = "cert_mgr";
+    cert_config.allow_development_cert = true;  // Allow development fallback
     
-    // Check if CA certificate already exists in NVS, only store if missing
-    if (!certificate_exists_in_nvs()) {
-        ESP_LOGI(TAG, "CA certificate not found in NVS, initializing...");
-        esp_err_t cert_err = store_ca_certificate(ca_certificate);
-        if (cert_err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to store CA certificate: %s", esp_err_to_name(cert_err));
+    esp_err_t cert_init_err = cert_manager_init(&cert_config);
+    if (cert_init_err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to initialize certificate manager: %s", esp_err_to_name(cert_init_err));
+        return;
+    }
+    
+    // Check if certificate exists, if not, provision development certificate
+    if (!cert_manager_is_certificate_valid()) {
+        ESP_LOGI(TAG, "No valid certificate found, provisioning development certificate...");
+        const char* dev_cert = DEMO_CA_CERTIFICATE_PEM;
+        esp_err_t store_err = cert_manager_store(dev_cert, CERT_SOURCE_DEVELOPMENT);
+        if (store_err != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to store development certificate: %s", esp_err_to_name(store_err));
         } else {
-            ESP_LOGI(TAG, "ThingsBoard/Mosquitto CA certificate initialized successfully");
+            ESP_LOGI(TAG, "Development certificate provisioned successfully");
         }
     } else {
-        ESP_LOGI(TAG, "CA certificate already exists in NVS, skipping initialization");
+        ESP_LOGI(TAG, "Valid certificate already exists, skipping initialization");
     }
 
     init_led();
