@@ -405,7 +405,7 @@ httpd_handle_t server = NULL;
 
 static esp_err_t connect_post_handler(httpd_req_t *req)
 {
-    char buf[512];
+    char buf[HTTP_CONTENT_BUFFER_SIZE];
     int ret, remaining = req->content_len;
 
     if (remaining >= sizeof(buf)) {
