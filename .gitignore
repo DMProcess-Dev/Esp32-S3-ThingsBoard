@@ -2,6 +2,7 @@
 /build
 /build-cmake
 /project_elf_src_esp32.c
+main/build/
 
 # SDK configuration files
 /sdkconfig
@@ -22,3 +23,36 @@
 *.pyc
 *.pyd
 __pycache__/
+
+# ESP32 specific files
+/managed_components/
+/dependencies.lock
+*.bin
+*.elf
+*.map
+/bootloader/
+/partition_table/
+
+# Security and certificates
+thingsboard/mosquitto/certs/*.key
+thingsboard/mosquitto/certs/*.crt
+thingsboard/mosquitto/certs/*.csr
+thingsboard/mosquitto/certs/*.srl
+thingsboard/mosquitto/config/password.txt
+
+# Runtime data and logs
+thingsboard/mosquitto/data/
+thingsboard/mosquitto/log/
+
+# Temporary files
+test_cert.py
+*.tmp
+*.bak
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Docker volumes (if any)
+.env
+docker-compose.override.yml
