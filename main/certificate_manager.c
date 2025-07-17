@@ -415,8 +415,12 @@ esp_err_t cert_manager_rotate(const char* new_cert_pem, cert_source_t source)
     size_t current_size;
     err = load_cert_from_nvs(NVS_KEY_PRIMARY_CERT, current_cert, sizeof(current_cert), &current_size);
     if (err == ESP_OK) {
-        store_cert_in_nvs(NVS_KEY_BACKUP_CERT, current_cert);
-        ESP_LOGI(TAG, "Current certificate backed up");
+        err = store_cert_in_nvs(NVS_KEY_BACKUP_CERT, current_cert);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to back up current certificate: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "Current certificate backed up");
+        }
     }
     
     // Store new certificate
