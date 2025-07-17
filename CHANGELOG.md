@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### ✨ Features
+- **(security)**: Implement comprehensive certificate management system with multi-tier provisioning (manufacturing, OTA, config endpoint, development) ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(security)**: Add certificate validation with CRC32 integrity checks and metadata tracking ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(security)**: Implement certificate rotation support without firmware updates ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(led)**: Add LED color management system with named constants and proper brightness scaling ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(core)**: Enhance error messages with actionable recovery steps for certificate issues ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+
+### 🔧 Code Quality
+- **(refactor)**: Add static keywords to internal functions for better encapsulation ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(refactor)**: Fix naming conventions (MAX_BRIGHTNESS → DEFAULT_LED_BRIGHTNESS) ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(refactor)**: Add HTTP_CONTENT_BUFFER_SIZE constant for buffer management ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
+- **(cleanup)**: Remove unused extern declarations and clean up code structure ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
 - **(security)**: Implement smart boot logic with credential detection for automatic provisioning bypass ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Add certificate optimization to prevent unnecessary NVS writes on subsequent boots ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Implement enterprise-grade SSL/TLS certificate management with automatic ThingsBoard/Mosquitto CA initialization ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))

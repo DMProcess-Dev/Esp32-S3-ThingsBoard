@@ -80,7 +80,10 @@ idf.py menuconfig
 
 ### Key Files
 - `main/app_main.c`: Main application entry point with event-driven logic
+- `main/certificate_manager.h`: Certificate management API and type definitions
+- `main/certificate_manager.c`: Secure certificate provisioning and validation implementation
 - `main/provisioning_page.h`: HTML content for provisioning web interface
+- `main/ca_certificate.h`: Development certificate definitions (fallback only)
 - `main/CMakeLists.txt`: Component configuration and dependencies
 - `CMakeLists.txt`: Root project configuration
 - `sdkconfig`: ESP-IDF configuration (auto-generated)
@@ -98,7 +101,7 @@ idf.py menuconfig
 - **Blue**: Connecting to Wi-Fi network
 - **Green**: Connected to Wi-Fi and MQTT
 - **Red**: Error state (Wi-Fi/MQTT connection failed)
-- **Brightness**: Configurable MAX_BRIGHTNESS (0-255, default 50)
+- **Brightness**: Configurable DEFAULT_LED_BRIGHTNESS (0-255, default 25)
 
 ## Provisioning Flow Architecture
 
@@ -124,10 +127,11 @@ idf.py menuconfig
 - **Keys**: `ssid`, `password`, `mqtt_host`, `mqtt_port`, `mqtt_user`, `mqtt_pass`
 - **Operations**: Atomic read/write with error handling
 
-#### Security Storage (`security` namespace)
-- **Keys**: `ca_cert` - ThingsBoard/Mosquitto CA certificate (PEM format)
-- **Purpose**: SSL/TLS certificate validation for MQTTS connections
-- **Initialization**: Automatic certificate storage on first boot
+#### Certificate Storage (`cert_mgr` namespace)
+- **Keys**: `primary_cert`, `backup_cert`, `metadata` - Certificate manager storage
+- **Purpose**: Multi-tier certificate provisioning and validation
+- **Initialization**: Automatic certificate manager initialization on first boot
+- **Metadata**: Certificate source, checksum, expiration, validation status
 
 ### Telemetry Data Structure
 JSON payload transmitted every 5 seconds:
@@ -140,36 +144,63 @@ JSON payload transmitted every 5 seconds:
 }
 ```
 
-## SSL/TLS SECURITY ARCHITECTURE
+## CERTIFICATE MANAGEMENT ARCHITECTURE
 
-### Certificate Management System
-The firmware implements enterprise-grade SSL/TLS security with automatic certificate management:
+### Advanced Certificate Manager System
+The firmware implements a production-ready certificate management system with multi-tier provisioning:
 
-#### Automatic Certificate Initialization
+#### Certificate Manager Initialization
 ```c
-// Executed on every boot in app_main()
-const char* ca_certificate = "-----BEGIN CERTIFICATE-----\n..."; // ThingsBoard/Mosquitto CA
-esp_err_t cert_err = store_ca_certificate(ca_certificate);
+// Certificate manager configuration in app_main()
+cert_manager_config_t cert_config = CERT_MANAGER_DEFAULT_CONFIG();
+cert_config.nvs_namespace = "cert_mgr";
+cert_config.allow_development_cert = true;  // Development fallback
+esp_err_t cert_init_err = cert_manager_init(&cert_config);
+```
+
+#### Multi-Tier Certificate Provisioning
+```c
+typedef enum {
+    CERT_SOURCE_MANUFACTURING = 0,  // Secure: Manufacturing injection
+    CERT_SOURCE_OTA_UPDATE,         // Secure: OTA updates
+    CERT_SOURCE_CONFIG_ENDPOINT,    // Secure: Encrypted endpoint
+    CERT_SOURCE_DEVELOPMENT,        // Fallback: Development only
+} cert_source_t;
 ```
 
 #### Certificate Storage Strategy
-- **Primary Namespace**: `security` - Dedicated certificate storage
-- **Fallback Namespace**: `wifi_creds` - Legacy compatibility
-- **Format**: PEM-encoded X.509 certificates
-- **Validation**: Full certificate chain verification
+- **Primary Storage**: `cert_mgr` namespace - Dedicated certificate manager storage
+- **Metadata Storage**: Certificate source, checksum, expiration tracking
+- **Backup Support**: Primary/backup certificate rotation
+- **Format**: PEM-encoded X.509 certificates with validation
+- **Integrity**: CRC32 checksum verification for corruption detection
 
-#### Certificate Loading Sequence
-1. **Primary Load**: Attempt to load from `security` namespace
-2. **Fallback Load**: Try `wifi_creds` namespace if primary fails
-3. **Error Handling**: Comprehensive SSL error logging and recovery
-4. **Validation**: Certificate expiration and CA chain validation
+#### Certificate Loading Priority
+1. **Primary Certificate**: Load from certificate manager storage
+2. **Backup Certificate**: Fallback to backup if primary fails
+3. **Development Certificate**: Fallback to embedded certificate (development only)
+4. **Validation**: Full certificate format and integrity verification
+
+### Certificate Manager API
+```c
+// Core certificate manager functions
+esp_err_t cert_manager_init(const cert_manager_config_t* config);
+esp_err_t cert_manager_store(const char* cert_pem, cert_source_t source);
+esp_err_t cert_manager_load(char* cert_buffer, size_t buffer_size, size_t* actual_size);
+esp_err_t cert_manager_validate(const char* cert_pem, cert_validation_result_t* result);
+esp_err_t cert_manager_rotate(const char* new_cert_pem, cert_source_t source);
+bool cert_manager_is_certificate_valid(void);
+```
 
 ### MQTTS Connection Security
 ```c
-// SSL/TLS configuration for MQTT
-.broker.verification.certificate = ca_cert,
-.broker.verification.use_global_ca_store = false,
-.broker.verification.crt_bundle_attach = NULL,
+// SSL/TLS configuration using certificate manager
+esp_err_t cert_err = cert_manager_load(ca_cert, cert_len, &cert_len);
+esp_mqtt_client_config_t mqtt_cfg = {
+    .broker.address.uri = uri,
+    .broker.verification.certificate = ca_cert,
+    .broker.verification.use_global_ca_store = false,
+};
 ```
 
 #### Security Features
@@ -177,35 +208,44 @@ esp_err_t cert_err = store_ca_certificate(ca_certificate);
 - **Protocol**: TLS 1.2+ with certificate validation
 - **CA Verification**: Full certificate authority validation
 - **Error Handling**: Enhanced SSL error detection and logging
+- **Certificate Metadata**: Source tracking and validation logging
 
 #### Certificate Validation Process
-1. **Certificate Load**: Load CA certificate from NVS storage
-2. **Chain Validation**: Verify complete certificate chain
-3. **Expiration Check**: Validate certificate is not expired
-4. **Connection Security**: Establish encrypted MQTTS connection
-5. **Error Recovery**: Comprehensive error handling for SSL failures
+1. **Certificate Load**: Load via certificate manager with metadata
+2. **Format Validation**: Verify PEM format and structure
+3. **Integrity Check**: CRC32 checksum validation
+4. **Expiration Check**: Validate certificate is not expired
+5. **Connection Security**: Establish encrypted MQTTS connection
+6. **Error Recovery**: Comprehensive error handling with recovery steps
 
-### Security Error Handling
+### Enhanced Security Error Handling
 ```c
-case MQTT_EVENT_ERROR:
-    if (event->error_handle->error_type == MQTT_ERROR_TYPE_TCP_TRANSPORT) {
-        ESP_LOGE(TAG, "SSL/TLS error occurred - error code: 0x%x", 
-                 event->error_handle->esp_tls_last_esp_err);
-        ESP_LOGE(TAG, "Check certificate validity, expiration, and CA certificate match");
-    }
+if (cert_err != ESP_OK) {
+    ESP_LOGE(TAG, "CRITICAL: Failed to load CA certificate from certificate manager!");
+    ESP_LOGE(TAG, "Recovery options:");
+    ESP_LOGE(TAG, "1. Run 'idf.py erase-flash' and reflash firmware to reinitialize certificates");
+    ESP_LOGE(TAG, "2. Provision certificate via secure endpoint using cert_manager_store()");
+    ESP_LOGE(TAG, "3. Check certificate expiration and validity");
+    ESP_LOGE(TAG, "4. Verify NVS partition is not corrupted");
+    ESP_LOGE(TAG, "5. Consult troubleshooting guide in project documentation");
+}
 ```
 
-### Certificate Functions
-- **`store_ca_certificate()`**: Store PEM certificate in NVS
-- **Certificate Loading**: Multi-namespace certificate retrieval
-- **Validation**: Certificate format and expiration checking
-- **Error Recovery**: Fallback mechanisms for certificate issues
+### Certificate Manager Functions
+- **`cert_manager_init()`**: Initialize certificate management system
+- **`cert_manager_store()`**: Store certificate with source tracking
+- **`cert_manager_load()`**: Load certificate with automatic validation
+- **`cert_manager_validate()`**: Comprehensive certificate validation
+- **`cert_manager_rotate()`**: Secure certificate rotation
+- **`cert_manager_get_metadata()`**: Certificate source and validation info
 
 ### Production Security Standards
-- ✅ **No Hardcoded Certificates**: All certificates stored in NVS
-- ✅ **Certificate Rotation**: Support for certificate updates
-- ✅ **Validation Logging**: Comprehensive certificate validation logs
-- ✅ **Error Recovery**: Graceful handling of certificate failures
+- ✅ **Multi-Tier Provisioning**: Manufacturing, OTA, config endpoint, development
+- ✅ **Certificate Validation**: Format, integrity, expiration checking
+- ✅ **Metadata Tracking**: Source, checksum, timestamps
+- ✅ **Certificate Rotation**: Secure updates without firmware changes
+- ✅ **Error Recovery**: Comprehensive recovery procedures
+- ✅ **Development Fallback**: Secure fallback for development environments
 - ✅ **Memory Management**: Secure certificate storage and cleanup
 
 ## LOGGING ARCHITECTURE
@@ -252,7 +292,8 @@ ESP_LOGD(TAG, "Processing task started on core %d", xPortGetCoreID());
 
 ### Current Memory Profile
 - **Free Heap**: 323,604 bytes at startup
-- **Certificate Storage**: ~2KB in NVS `security` namespace
+- **Certificate Storage**: ~2KB in NVS `cert_mgr` namespace (including metadata)
+- **Certificate Manager**: ~8KB code size with comprehensive validation
 - **MQTT Client**: SSL/TLS context memory allocation
 - **Temperature Sensor**: Built-in ESP32-S3 sensor integration
 

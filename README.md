@@ -10,19 +10,20 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
   - Navigate to `http://192.168.4.1`. The page comes pre-filled with default credentials for quick setup.
 - **Dynamic Wi-Fi Scanning**:
   - The provisioning page includes a "Scan for Networks" button with an improved UI that gracefully handles long network names.
-- **Enterprise-Grade SSL/TLS Security**:
-  - **Automatic Certificate Management**: ThingsBoard/Mosquitto CA certificate automatically initialized on boot
+- **Enterprise-Grade Certificate Management**:
+  - **Multi-Tier Provisioning**: Manufacturing, OTA, config endpoint, and development certificate sources
+  - **Certificate Manager**: Comprehensive certificate validation with integrity checking and metadata tracking
   - **MQTTS Protocol**: Secure MQTT connections on port 8883 with full SSL/TLS encryption
-  - **Certificate Validation**: Complete CA certificate chain verification with expiration checking
-  - **Multi-Namespace Storage**: Certificates stored in dedicated `security` NVS namespace with fallback support
-  - **Production Security**: No hardcoded certificates, proper certificate rotation support
+  - **Certificate Validation**: Format validation, CRC32 integrity checks, and expiration monitoring
+  - **Secure Storage**: Certificates stored in dedicated `cert_mgr` NVS namespace with backup support
+  - **Production Ready**: Certificate rotation without firmware updates, source tracking, and recovery procedures
 - **Enhanced LED Status Indicator**:
   - The onboard ARGB LED (GPIO 48) provides detailed visual indication of device status:
     - **White:** Provisioning mode active
     - **Blue:** Connecting to Wi-Fi network
     - **Green:** Fully connected to Wi-Fi and MQTTS with SSL/TLS encryption
     - **Red:** Connection error (Wi-Fi or MQTTS SSL/TLS failure)
-    - **Brightness:** Configurable (0-255, default 50)
+    - **Brightness:** Configurable (0-255, default 25)
 - **Real-Time Telemetry**:
   - **Temperature Monitoring**: Built-in ESP32-S3 sensor (Range: -10°C ~ 80°C, ±1°C accuracy)
   - **System Metrics**: RSSI, heap memory, uptime tracking
@@ -42,7 +43,7 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
 ### Smart Device Behavior:
 - **First Boot**: Automatic provisioning mode (no Wi-Fi credentials stored)
 - **After Configuration**: Smart boot directly to Wi-Fi connection (credentials stored)
-- **Certificate Management**: CA certificate automatically initialized once, reused on subsequent boots
+- **Certificate Management**: Certificate manager automatically initializes development certificates, with support for production certificate sources
 - **Reset to Provisioning**: Use `idf.py erase-flash` to clear credentials and return to provisioning mode
 
 ## Getting Started (Detailed Setup)

@@ -284,7 +284,7 @@ esp_err_t cert_manager_load(char* cert_buffer, size_t buffer_size, size_t* actua
         size_t dev_cert_len = strlen(DEMO_CA_CERTIFICATE_PEM);
         if (dev_cert_len < buffer_size) {
             strncpy(cert_buffer, DEMO_CA_CERTIFICATE_PEM, buffer_size - 1);
-            cert_buffer[buffer_size - 1] = '\\0';
+            cert_buffer[buffer_size - 1] = '\0';
             if (actual_size) {
                 *actual_size = dev_cert_len;
             }
@@ -329,12 +329,25 @@ esp_err_t cert_manager_validate(const char* cert_pem, cert_validation_result_t* 
         }
     }
     
-    // Check expiry (simplified)
+    // Check expiry using stored metadata
     uint64_t current_time = esp_timer_get_time();
-    uint64_t expiry_time = extract_cert_expiry(cert_pem);
+    uint64_t expiry_time = 0;
+    
+    // Try to load expiry time from stored metadata first
+    cert_metadata_t metadata;
+    esp_err_t metadata_err = load_cert_metadata(&metadata);
+    if (metadata_err == ESP_OK) {
+        expiry_time = metadata.expiry_time;
+        ESP_LOGD(TAG, "Using stored expiry time from metadata");
+    } else {
+        // Fallback to extracting from PEM if metadata not available
+        expiry_time = extract_cert_expiry(cert_pem);
+        ESP_LOGD(TAG, "Metadata not available, extracting expiry from PEM");
+    }
+    
     if (current_time > expiry_time) {
         *result = CERT_EXPIRED;
-        ESP_LOGW(TAG, "Certificate has expired");
+        ESP_LOGW(TAG, "Certificate has expired (current: %llu, expiry: %llu)", current_time, expiry_time);
         return ESP_OK;
     }
     
