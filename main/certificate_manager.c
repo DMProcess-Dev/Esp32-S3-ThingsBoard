@@ -275,8 +275,16 @@ esp_err_t cert_manager_load(char* cert_buffer, size_t buffer_size, size_t* actua
     // Try backup certificate
     err = load_cert_from_nvs(NVS_KEY_BACKUP_CERT, cert_buffer, buffer_size, actual_size);
     if (err == ESP_OK) {
-        ESP_LOGI(TAG, "Backup certificate loaded successfully");
-        return ESP_OK;
+        // Validate loaded backup certificate
+        cert_validation_result_t validation_result;
+        esp_err_t validation_err = cert_manager_validate(cert_buffer, &validation_result);
+        
+        if (validation_err == ESP_OK && validation_result == CERT_VALID) {
+            ESP_LOGI(TAG, "Backup certificate loaded and validated successfully");
+            return ESP_OK;
+        } else {
+            ESP_LOGW(TAG, "Backup certificate validation failed: %d", validation_result);
+        }
     }
     
     // Fallback to development certificate if allowed
