@@ -10,21 +10,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### ✨ Features
 - **(security)**: Implement smart boot logic with credential detection for automatic provisioning bypass ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Add certificate optimization to prevent unnecessary NVS writes on subsequent boots ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
-- **(security)**: Implement enterprise-grade SSL/TLS certificate management with automatic ThingsBoard/Mosquitto CA initialization
-- **(mqtt)**: Add secure MQTTS connections with full certificate validation on port 8883
-- **(security)**: Multi-namespace certificate storage with fallback support (security/wifi_creds namespaces)
-- **(security)**: Enhanced SSL error handling and comprehensive certificate validation logging
-- **(telemetry)**: Integrate ESP32-S3 built-in temperature sensor with ±1°C accuracy (-10°C to 80°C range)
-- **(mqtt, security)**: Implement SSL certificate verification for secure MQTTS connections
+- **(security)**: Implement enterprise-grade SSL/TLS certificate management with automatic ThingsBoard/Mosquitto CA initialization ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
+- **(mqtt)**: Add secure MQTTS connections with full certificate validation on port 8883 ([b7a712f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/b7a712f))
+- **(security)**: Multi-namespace certificate storage with fallback support (security/wifi_creds namespaces) ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
+- **(security)**: Enhanced SSL error handling and comprehensive certificate validation logging ([fed9c00](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/fed9c00))
+- **(telemetry)**: Integrate ESP32-S3 built-in temperature sensor with ±1°C accuracy (-10°C to 80°C range) ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
+- **(mqtt, security)**: Implement SSL certificate verification for secure MQTTS connections ([fed9c00](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/fed9c00))
+- **(ui, led)**: Implement ARGB LED status indicator system with configurable brightness control ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
+- **(provisioning)**: Add configurable MQTT server settings in provisioning UI ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
+- **(ui)**: Add real-time connection status notifications via polling API ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
+- **(ui)**: Implement responsive two-column layout with dark mode support ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
+- **(provisioning)**: Improve Wi-Fi network list with cache prevention headers ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
 - **(ui, led)**: Improve LED feedback and provisioning UI ([e8b9baa](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/e8b9baa))
 - **(chore)**: Add remote mqtt broker and update firmware ([4296abc](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/4296abc))
 - **(provisioning)**: Implement web-based Wi-Fi provisioning with network scanning ([9e2e485](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/9e2e485))
 
 ### 🐛 Bug Fixes
 - **(wifi)**: Fix Wi-Fi initialization sequence for direct connection mode in smart boot ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
-- **(security)**: Remove hardcoded credentials from production firmware for enhanced security posture
-- **(ssl)**: Fix SSL certificate loading sequence with proper fallback mechanism
-- **(mqtt)**: Resolve MQTTS connection failures through proper certificate validation
+- **(security)**: Remove hardcoded credentials from production firmware for enhanced security posture ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
+- **(ssl)**: Fix SSL certificate loading sequence with proper fallback mechanism ([fed9c00](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/fed9c00))
+- **(mqtt)**: Resolve MQTTS connection failures through proper certificate validation ([fed9c00](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/fed9c00))
 - **(provisioning)**: Address all review comments for provisioning flow ([60eeb77](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/60eeb77))
 
 ### 🔧 Miscellaneous

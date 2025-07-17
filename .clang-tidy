@@ -1,0 +1,28 @@
+---
+# ESP32 Project Clang-Tidy Configuration
+# Focuses on our code quality, excludes external managed components
+
+Checks: '-*,clang-analyzer-core.NullDereference,clang-analyzer-unix.*,bugprone-*,-bugprone-macro-parentheses,readability-*,performance-*,-readability-magic-numbers,-readability-avoid-const-params-in-decls'
+
+# Header filter: Only analyze our headers, exclude external components
+HeaderFilterRegex: '^(?!.*managed_components)(?!.*build/).*\.(h|hpp)$'
+
+# Warnings as errors: Let ESP32 development decide what's critical
+WarningsAsErrors: ''
+
+# Format style: Use project's formatting (if .clang-format exists)
+FormatStyle: 'file'
+
+# Check filters for ESP32 development:
+# - Exclude external managed components (espressif__led_strip, etc.)
+# - Exclude build directory artifacts
+# - Focus on main application code and custom components
+# - Allow ESP-IDF specific patterns and macros
+
+CheckOptions:
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+  - key: readability-identifier-naming.MacroCase
+    value: UPPER_CASE
