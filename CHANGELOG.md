@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### ✨ Features
+- **(security)**: Implement smart boot logic with credential detection for automatic provisioning bypass ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
+- **(security)**: Add certificate optimization to prevent unnecessary NVS writes on subsequent boots ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Implement enterprise-grade SSL/TLS certificate management with automatic ThingsBoard/Mosquitto CA initialization
 - **(mqtt)**: Add secure MQTTS connections with full certificate validation on port 8883
 - **(security)**: Multi-namespace certificate storage with fallback support (security/wifi_creds namespaces)
@@ -19,11 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(provisioning)**: Implement web-based Wi-Fi provisioning with network scanning ([9e2e485](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/9e2e485))
 
 ### 🐛 Bug Fixes
+- **(wifi)**: Fix Wi-Fi initialization sequence for direct connection mode in smart boot ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Remove hardcoded credentials from production firmware for enhanced security posture
 - **(ssl)**: Fix SSL certificate loading sequence with proper fallback mechanism
 - **(mqtt)**: Resolve MQTTS connection failures through proper certificate validation
 - **(provisioning)**: Address all review comments for provisioning flow ([60eeb77](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/60eeb77))
 
 ### 🔧 Miscellaneous
+- **(docs)**: Update comprehensive documentation with SSL/TLS architecture and FAQ sections ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - Add initial project structure and documentation ([370acd3](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/370acd394be21369640221aa0c89e4cec04b43e3))
 - **(setup)**: Verify ESP-IDF toolchain and board communication ([45ddc4a](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/45ddc4a77962aaf59282e0196cda7dfc4cdfb71b))
