@@ -1,14 +1,56 @@
 services:
-  mosquitto:
-    image: eclipse-mosquitto:latest
-    container_name: mosquitto
+  # ThingsBoard PostgreSQL Database
+  tb-postgres:
+    restart: always
+    image: postgres:15
+    container_name: tb-postgres
     ports:
-      - "1883:1883"
-      - "8883:8883"
-      - "9001:9001"
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=thingsboard
     volumes:
-      - ./thingsboard/mosquitto/config:/mosquitto/config
-      - ./thingsboard/mosquitto/certs:/mosquitto/certs
-      - ./thingsboard/mosquitto/data:/mosquitto/data
-      - ./thingsboard/mosquitto/log:/mosquitto/log
-    restart: unless-stopped
+      - ./thingsboard/db-data:/var/lib/postgresql/data
+    networks:
+      - thingsboard-net
+
+  # ThingsBoard Redis Cache
+  tb-redis:
+    restart: always
+    image: redis:7
+    container_name: tb-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - thingsboard-net
+
+  # ThingsBoard Application Service
+  thingsboard:
+    restart: always
+    image: thingsboard/tb-postgres:latest
+    container_name: thingsboard
+    ports:
+      - "8080:9090" # Web UI
+      - "7070:7070"
+      - "1883:1883" # MQTT Broker
+    depends_on:
+      - tb-postgres
+      - tb-redis
+    environment:
+      - TB_QUEUE_TYPE=in-memory
+      - TB_KAFKA_SERVERS=kafka:9092
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://tb-postgres:5432/thingsboard
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=postgres
+      - SPRING_REDIS_HOST=tb-redis
+    volumes:
+      - ./thingsboard/tb-data:/data
+      - ./thingsboard/tb-logs:/var/log/thingsboard
+    networks:
+      - thingsboard-net
+
+# Define the shared network
+networks:
+  thingsboard-net:
+    driver: bridge

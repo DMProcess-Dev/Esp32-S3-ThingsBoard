@@ -1,12 +1,14 @@
-/* MQTT (over TCP) Example
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
+/**
+ * @file app_main.c
+ * @brief Main application file for ESP32-S3 ThingsBoard client.
+ *
+ * This file contains the main logic for the ESP32-S3 device, which includes:
+ * - Wi-Fi provisioning via a web server.
+ * - "Smart boot" to either start in provisioning mode or connect directly to Wi-Fi.
+ * - MQTT client for communication with a ThingsBoard server.
+ * - A telemetry task that sends sensor data (temperature, RSSI, heap, uptime) to ThingsBoard.
+ * - LED status indication for different device states.
+ */
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -30,8 +32,6 @@
 #include "driver/gpio.h"
 #include "esp_tls.h"
 #include "led_strip.h"
-#include "ca_certificate.h"
-#include "certificate_manager.h"
 
 #define ARGB_LED_GPIO 48
 #define DEFAULT_LED_BRIGHTNESS 25   // Default brightness level (0-255)
@@ -39,22 +39,28 @@
 #define HTTP_CONTENT_BUFFER_SIZE 512 // HTTP POST content buffer
 
 static led_strip_handle_t s_led_strip;
+static bool telemetry_task_started = false;
 
-// LED color management system
+/**
+ * @brief Represents an RGB color.
+ */
 typedef struct {
     uint8_t red;
     uint8_t green;
     uint8_t blue;
 } led_color_t;
 
-// LED color constants
-static const led_color_t LED_COLOR_RED     = {255, 0, 0};
-static const led_color_t LED_COLOR_GREEN   = {0, 255, 0};
-static const led_color_t LED_COLOR_BLUE    = {0, 0, 255};
-static const led_color_t LED_COLOR_WHITE   = {255, 255, 255};
-static const led_color_t LED_COLOR_YELLOW  = {255, 255, 0};
-static const led_color_t LED_COLOR_PROVISIONING = {50, 50, 50}; // Dim white for provisioning mode
+// LED color constants for different states
+static const led_color_t LED_COLOR_RED     = {255, 0, 0};      // Error or disconnection
+static const led_color_t LED_COLOR_GREEN   = {0, 255, 0};      // Connected
+static const led_color_t LED_COLOR_BLUE    = {0, 0, 255};      // Connecting
+static const led_color_t LED_COLOR_WHITE   = {255, 255, 255};  // Data publish indication
+static const led_color_t LED_COLOR_YELLOW  = {255, 255, 0};    // MQTT disconnected or error
+static const led_color_t LED_COLOR_PROVISIONING = {50, 50, 50}; // Provisioning mode (dim white)
 
+/**
+ * @brief Initializes the LED strip.
+ */
 static void init_led(void)
 {
     led_strip_config_t strip_config = {
@@ -68,9 +74,14 @@ static void init_led(void)
     led_strip_clear(s_led_strip);
 }
 
+/**
+ * @brief Sets the color of the LED.
+ *
+ * @param color The color to set.
+ */
 static void set_led_color(const led_color_t *color)
 {
-    led_strip_set_pixel(s_led_strip, 0, 
+    led_strip_set_pixel(s_led_strip, 0,
                         (color->red * DEFAULT_LED_BRIGHTNESS) / MAX_LED_BRIGHTNESS,
                         (color->green * DEFAULT_LED_BRIGHTNESS) / MAX_LED_BRIGHTNESS,
                         (color->blue * DEFAULT_LED_BRIGHTNESS) / MAX_LED_BRIGHTNESS);
@@ -88,17 +99,14 @@ static void log_error_if_nonzero(const char *message, int error_code)
     }
 }
 
-/*
- * @brief Event handler registered to receive MQTT events
+/**
+ * @brief FreeRTOS task to send telemetry data to ThingsBoard.
  *
- *  This function is called by the MQTT client event loop.
+ * This task periodically reads sensor data (temperature, RSSI, heap, uptime),
+ * creates a JSON payload, and publishes it to the ThingsBoard server via MQTT.
  *
- * @param handler_args user data registered to the event.
- * @param base Event base for the handler(always MQTT Base in this example).
- * @param event_id The id for the received event.
- * @param event_data The data for the event, esp_mqtt_event_handle_t.
+ * @param pvParameters The MQTT client handle.
  */
-
 static void telemetry_task(void *pvParameters)
 {
     esp_mqtt_client_handle_t client = (esp_mqtt_client_handle_t)pvParameters;
@@ -146,6 +154,16 @@ static void telemetry_task(void *pvParameters)
     }
 }
 
+/**
+ * @brief Event handler for MQTT events.
+ *
+ * This function is called by the MQTT client event loop.
+ *
+ * @param handler_args user data registered to the event.
+ * @param base Event base for the handler.
+ * @param event_id The id for the received event.
+ * @param event_data The data for the event.
+ */
 static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
     ESP_LOGD(TAG, "Event dispatched from event loop base=%s, event_id=%" PRIi32 "", base, event_id);
@@ -155,7 +173,11 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
     case MQTT_EVENT_CONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
         set_led_color(&LED_COLOR_GREEN);
-        xTaskCreate(telemetry_task, "telemetry_task", 4096, client, 5, NULL);
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        if (!telemetry_task_started) { // Check the flag
+            xTaskCreate(telemetry_task, "telemetry_task", 4096, client, 5, NULL);
+            telemetry_task_started = true; // Set the flag
+        }
         break;
     case MQTT_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -173,9 +195,6 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
                 ESP_LOGE(TAG, "SSL/TLS error occurred - error code: 0x%x", event->error_handle->esp_tls_last_esp_err);
                 ESP_LOGE(TAG, "Check certificate validity, expiration, and CA certificate match");
             }
-            log_error_if_nonzero("reported from esp-tls", event->error_handle->esp_tls_last_esp_err);
-            log_error_if_nonzero("reported from tls stack", event->error_handle->esp_tls_stack_err);
-            log_error_if_nonzero("captured as transport's socket errno",  event->error_handle->esp_transport_sock_errno);
             ESP_LOGI(TAG, "Last errno string (%s)", strerror(event->error_handle->esp_transport_sock_errno));
         }
         break;
@@ -186,9 +205,9 @@ static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_
 }
 
 /**
- * @brief Check if Wi-Fi credentials exist in NVS
- * 
- * @return bool true if Wi-Fi credentials are stored, false otherwise
+ * @brief Checks if Wi-Fi credentials exist in NVS.
+ *
+ * @return true if Wi-Fi credentials are stored, false otherwise.
  */
 static bool wifi_credentials_exist(void) {
     nvs_handle_t nvs_handle;
@@ -196,72 +215,52 @@ static bool wifi_credentials_exist(void) {
     if (err != ESP_OK) {
         return false;
     }
-    
+
     size_t ssid_len = 0;
     err = nvs_get_str(nvs_handle, "ssid", NULL, &ssid_len);
     nvs_close(nvs_handle);
-    
+
     return (err == ESP_OK && ssid_len > 0);
 }
 
 
-
+/**
+ * @brief Starts the MQTT client.
+ *
+ * This function retrieves MQTT credentials from NVS and starts the MQTT client.
+ */
 static void mqtt_app_start(void)
 {
-    nvs_handle_t nvs_handle;
-    ESP_ERROR_CHECK(nvs_open("wifi_creds", NVS_READONLY, &nvs_handle));
+    // nvs_handle_t nvs_handle;
+    // ESP_ERROR_CHECK(nvs_open("wifi_creds", NVS_READONLY, &nvs_handle));
 
-    char mqtt_host[64];
-    char mqtt_port_str[8];
-    char mqtt_user[32];
-    char mqtt_pass[32];
-    size_t len;
+    // char mqtt_host[64];
+    // char mqtt_port_str[8];
+    // char mqtt_user[32] = {0};
+    // char mqtt_pass[32] = {0};
+    // size_t len;
 
-    len = sizeof(mqtt_host);
-    ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_host", mqtt_host, &len));
-    len = sizeof(mqtt_port_str);
-    ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_port", mqtt_port_str, &len));
-    len = sizeof(mqtt_user);
-    nvs_get_str(nvs_handle, "mqtt_user", mqtt_user, &len);
-    len = sizeof(mqtt_pass);
-    nvs_get_str(nvs_handle, "mqtt_pass", mqtt_pass, &len);
+    // len = sizeof(mqtt_host);
+    // ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_host", mqtt_host, &len));
+    // len = sizeof(mqtt_port_str);
+    // ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_port", mqtt_port_str, &len));
+    // len = sizeof(mqtt_user);
+    // nvs_get_str(nvs_handle, "mqtt_user", mqtt_user, &len);
+    // len = sizeof(mqtt_pass);
+    // nvs_get_str(nvs_handle, "mqtt_pass", mqtt_pass, &len);
 
-    nvs_close(nvs_handle);
+    // nvs_close(nvs_handle);
+    const char *mqtt_host = "193.164.4.51";
+    const char *mqtt_port_str = "1883";
+    const char *mqtt_user = "42j9xqzv5p937n0nz6ah"; // This is the Access Token
+    const char *mqtt_pass = "";
 
     char uri[128];
-    snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, mqtt_port_str); // Use configured port for MQTTS
-
-    // Load CA certificate using certificate manager
-    static char ca_cert[2048];
-    size_t cert_len = sizeof(ca_cert);
-    
-    esp_err_t cert_err = cert_manager_load(ca_cert, cert_len, &cert_len);
-    if (cert_err != ESP_OK) {
-        ESP_LOGE(TAG, "CRITICAL: Failed to load CA certificate from certificate manager!");
-        ESP_LOGE(TAG, "Recovery options:");
-        ESP_LOGE(TAG, "1. Run 'idf.py erase-flash' and reflash firmware to reinitialize certificates");
-        ESP_LOGE(TAG, "2. Provision certificate via secure endpoint using cert_manager_store()");
-        ESP_LOGE(TAG, "3. Check certificate expiration and validity");
-        ESP_LOGE(TAG, "4. Verify NVS partition is not corrupted");
-        ESP_LOGE(TAG, "5. Consult troubleshooting guide in project documentation");
-        set_led_color(&LED_COLOR_RED);
-        return; // Exit without starting MQTT client
-    }
-    
-    // Display certificate metadata for debugging
-    cert_metadata_t metadata;
-    if (cert_manager_get_metadata(&metadata) == ESP_OK) {
-        ESP_LOGI(TAG, "Certificate loaded successfully:");
-        ESP_LOGI(TAG, "  - Source: %s", cert_manager_get_source_name(metadata.source));
-        ESP_LOGI(TAG, "  - Size: %d bytes", metadata.cert_size);
-        ESP_LOGI(TAG, "  - Valid: %s", metadata.is_valid ? "yes" : "no");
-    } else {
-        ESP_LOGI(TAG, "CA certificate loaded successfully (no metadata available)");
-    }
+    snprintf(uri, sizeof(uri), "mqtt://%s:%s", mqtt_host, mqtt_port_str); // Use configured port for MQTTS
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = uri,
-        .broker.verification.certificate = ca_cert,
+        .session.keepalive = 60,
         .credentials.username = mqtt_user,
         .credentials.authentication.password = mqtt_pass,
     };
@@ -271,7 +270,12 @@ static void mqtt_app_start(void)
     esp_mqtt_client_start(client);
 }
 
-/* HTTP server handlers */
+/**
+ * @brief HTTP GET handler for scanning Wi-Fi networks.
+ *
+ * @param req The HTTP request.
+ * @return ESP_OK on success, ESP_FAIL on failure.
+ */
 static esp_err_t wifi_scan_get_handler(httpd_req_t *req)
 {
     wifi_scan_config_t scan_config = {
@@ -326,6 +330,9 @@ static esp_err_t wifi_scan_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * @brief Represents the Wi-Fi connection status.
+ */
 typedef enum {
     STATUS_IDLE,
     STATUS_CONNECTING,
@@ -336,7 +343,7 @@ typedef enum {
 static connection_status_t s_connection_status = STATUS_IDLE;
 
 /**
- * @brief Initialize Wi-Fi station with stored credentials
+ * @brief Initializes the Wi-Fi station with stored credentials.
  */
 static void wifi_init_sta(void) {
     // Initialize Wi-Fi
@@ -374,6 +381,12 @@ static void wifi_init_sta(void) {
     ESP_LOGI(TAG, "Connecting to stored Wi-Fi network: %s", ssid);
 }
 
+/**
+ * @brief HTTP GET handler for getting the connection status.
+ *
+ * @param req The HTTP request.
+ * @return ESP_OK on success.
+ */
 static esp_err_t status_get_handler(httpd_req_t *req)
 {
     cJSON *root = cJSON_CreateObject();
@@ -386,6 +399,12 @@ static esp_err_t status_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * @brief HTTP GET handler for the favicon.
+ *
+ * @param req The HTTP request.
+ * @return ESP_OK.
+ */
 static esp_err_t favicon_get_handler(httpd_req_t *req)
 {
     httpd_resp_set_status(req, "204 No Content");
@@ -393,6 +412,12 @@ static esp_err_t favicon_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * @brief HTTP GET handler for the root URL.
+ *
+ * @param req The HTTP request.
+ * @return ESP_OK.
+ */
 static esp_err_t root_get_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "text/html");
@@ -403,6 +428,15 @@ static esp_err_t root_get_handler(httpd_req_t *req)
 
 httpd_handle_t server = NULL;
 
+/**
+ * @brief HTTP POST handler for connecting to Wi-Fi.
+ *
+ * This function receives Wi-Fi and MQTT credentials from the web page,
+ * stores them in NVS, and initiates a connection to the Wi-Fi network.
+ *
+ * @param req The HTTP request.
+ * @return ESP_OK on success, ESP_FAIL on failure.
+ */
 static esp_err_t connect_post_handler(httpd_req_t *req)
 {
     char buf[HTTP_CONTENT_BUFFER_SIZE];
@@ -474,6 +508,11 @@ static esp_err_t connect_post_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
+/**
+ * @brief Starts the web server for provisioning.
+ *
+ * @return The HTTP server handle.
+ */
 static httpd_handle_t start_webserver(void)
 {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -524,6 +563,11 @@ static httpd_handle_t start_webserver(void)
     return server;
 }
 
+/**
+ * @brief Starts the provisioning server.
+ *
+ * This function starts the Wi-Fi in AP+STA mode and starts the web server.
+ */
 static void start_provisioning_server(void)
 {
     ESP_LOGI(TAG, "Starting provisioning mode");
@@ -534,6 +578,8 @@ static void start_provisioning_server(void)
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
     // Clear any stored STA credentials
     wifi_config_t sta_config = {0};
@@ -551,8 +597,6 @@ static void start_provisioning_server(void)
     if (strlen((char *)ap_config.ap.password) == 0) {
         ap_config.ap.authmode = WIFI_AUTH_OPEN;
     }
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
@@ -562,6 +606,14 @@ static void start_provisioning_server(void)
     start_webserver();
 }
 
+/**
+ * @brief Event handler for Wi-Fi and IP events.
+ *
+ * @param arg Unused.
+ * @param event_base The event base.
+ * @param event_id The event ID.
+ * @param event_data The event data.
+ */
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
 {
@@ -605,6 +657,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
+/**
+ * @brief Main application entry point.
+ */
 void app_main(void)
 {
     ESP_LOGI(TAG, "[APP] Startup..");
@@ -619,37 +674,15 @@ void app_main(void)
     esp_log_level_set("transport", ESP_LOG_VERBOSE);
     esp_log_level_set("outbox", ESP_LOG_VERBOSE);
 
+    // Initialize NVS, network interface, and event loop
     ESP_ERROR_CHECK(nvs_flash_init());
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // Initialize certificate manager for secure certificate provisioning
-    cert_manager_config_t cert_config = CERT_MANAGER_DEFAULT_CONFIG();
-    cert_config.nvs_namespace = "cert_mgr";
-    cert_config.allow_development_cert = true;  // Allow development fallback
-    
-    esp_err_t cert_init_err = cert_manager_init(&cert_config);
-    if (cert_init_err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize certificate manager: %s", esp_err_to_name(cert_init_err));
-        return;
-    }
-    
-    // Check if certificate exists, if not, provision development certificate
-    if (!cert_manager_is_certificate_valid()) {
-        ESP_LOGI(TAG, "No valid certificate found, provisioning development certificate...");
-        const char* dev_cert = DEMO_CA_CERTIFICATE_PEM;
-        esp_err_t store_err = cert_manager_store(dev_cert, CERT_SOURCE_DEVELOPMENT);
-        if (store_err != ESP_OK) {
-            ESP_LOGW(TAG, "Failed to store development certificate: %s", esp_err_to_name(store_err));
-        } else {
-            ESP_LOGI(TAG, "Development certificate provisioned successfully");
-        }
-    } else {
-        ESP_LOGI(TAG, "Valid certificate already exists, skipping initialization");
-    }
-
+    // Initialize the LED
     init_led();
 
+    // Register event handlers
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL));
 

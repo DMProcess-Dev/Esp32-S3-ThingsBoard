@@ -161,7 +161,7 @@ static const char provisioning_html[] = R"rawliteral(
                 <label for="mqtt_host">Host</label>
                 <input type="text" id="mqtt_host" name="mqtt_host" value="193.164.4.51">
                 <label for="mqtt_port">Port</label>
-                <input type="text" id="mqtt_port" name="mqtt_port" value="8883">
+                <input type="text" id="mqtt_port" name="mqtt_port" value="1883">
                 <label for="mqtt_user">Username</label>
                 <input type="text" id="mqtt_user" name="mqtt_user" autocomplete="off" value="esp32-device">
                 <label for="mqtt_pass">Password</label>
