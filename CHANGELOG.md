@@ -8,17 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### ✨ Features
+- **(thingsboard)**: add dashboard widgets and configuration ([5fcccf7](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/5fcccf7))
+- **(thingsboard)**: Implement ThingsBoard integration with access token authentication ([b7bbff3](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/b7bbff3))
 - **(security)**: Implement comprehensive certificate management system with multi-tier provisioning (manufacturing, OTA, config endpoint, development) ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
 - **(security)**: Add certificate validation with CRC32 integrity checks and metadata tracking ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
 - **(security)**: Implement certificate rotation support without firmware updates ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
 - **(led)**: Add LED color management system with named constants and proper brightness scaling ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
 - **(core)**: Enhance error messages with actionable recovery steps for certificate issues ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
-
-### 🔧 Code Quality
-- **(refactor)**: Add static keywords to internal functions for better encapsulation ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
-- **(refactor)**: Fix naming conventions (MAX_BRIGHTNESS → DEFAULT_LED_BRIGHTNESS) ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
-- **(refactor)**: Add HTTP_CONTENT_BUFFER_SIZE constant for buffer management ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
-- **(cleanup)**: Remove unused extern declarations and clean up code structure ([c10b81f](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/c10b81f))
 - **(security)**: Implement smart boot logic with credential detection for automatic provisioning bypass ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Add certificate optimization to prevent unnecessary NVS writes on subsequent boots ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Implement enterprise-grade SSL/TLS certificate management with automatic ThingsBoard/Mosquitto CA initialization ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
@@ -33,15 +29,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **(ui)**: Implement responsive two-column layout with dark mode support ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
 - **(provisioning)**: Improve Wi-Fi network list with cache prevention headers ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
 - **(ui, led)**: Improve LED feedback and provisioning UI ([e8b9baa](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/e8b9baa))
-- **(chore)**: Add remote mqtt broker and update firmware ([4296abc](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/4296abc))
-- **(provisioning)**: Implement web-based Wi-Fi provisioning with network scanning ([9e2e485](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/9e2e485))
+- **(chore)**: Add remote mqtt broker and update firmware ([e8b9baa](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/e8b9baa))
+- **(provisioning)**: Implement web-based Wi-Fi provisioning with network scanning ([1b25279](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/1b25279))
 
 ### 🐛 Bug Fixes
 - **(wifi)**: Fix Wi-Fi initialization sequence for direct connection mode in smart boot ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(security)**: Remove hardcoded credentials from production firmware for enhanced security posture ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))
 - **(ssl)**: Fix SSL certificate loading sequence with proper fallback mechanism ([fed9c00](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/fed9c00))
 - **(mqtt)**: Resolve MQTTS connection failures through proper certificate validation ([fed9c00](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/fed9c00))
-- **(provisioning)**: Address all review comments for provisioning flow ([60eeb77](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/60eeb77))
+- **(provisioning)**: Address all review comments for provisioning flow ([27d81da](https://github.com/OmerFarukOruc/Esp32-S3-ThingsBoard/commit/27d81da))
 
 ### 🔧 Miscellaneous
 - **(docs)**: Update comprehensive documentation with SSL/TLS architecture and FAQ sections ([385248d](https://github.com/DMProcess-Dev/Esp32-S3-ThingsBoard/commit/385248d))

@@ -1,6 +1,6 @@
 # ESP32-S3 ThingsBoard Demo
 
-This project is a demonstration firmware for an ESP32-S3 microcontroller designed to connect to the ThingsBoard IoT platform. It includes a robust web-based provisioning system to configure Wi-Fi credentials and demonstrates a connection to a public MQTT broker.
+This project is a demonstration firmware for an ESP32-S3 microcontroller designed to connect to the ThingsBoard IoT platform. It includes a robust web-based provisioning system with ThingsBoard access token authentication and demonstrates real-time telemetry transmission.
 
 ## Current Features
 
@@ -10,24 +10,23 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
   - Navigate to `http://192.168.4.1`. The page comes pre-filled with default credentials for quick setup.
 - **Dynamic Wi-Fi Scanning**:
   - The provisioning page includes a "Scan for Networks" button with an improved UI that gracefully handles long network names.
-- **Enterprise-Grade Certificate Management**:
-  - **Multi-Tier Provisioning**: Manufacturing, OTA, config endpoint, and development certificate sources
-  - **Certificate Manager**: Comprehensive certificate validation with integrity checking and metadata tracking
-  - **MQTTS Protocol**: Secure MQTT connections on port 8883 with full SSL/TLS encryption
-  - **Certificate Validation**: Format validation, CRC32 integrity checks, and expiration monitoring
-  - **Secure Storage**: Certificates stored in dedicated `cert_mgr` NVS namespace with backup support
-  - **Production Ready**: Certificate rotation without firmware updates, source tracking, and recovery procedures
+- **ThingsBoard Integration**:
+  - **Access Token Authentication**: Web-based provisioning with ThingsBoard device access tokens
+  - **Smart Protocol Detection**: Automatic MQTT (port 1883) vs MQTTS (port 8883) selection
+  - **Pre-configured Setup**: Default ThingsBoard server (193.164.4.51) and demo access token
+  - **Seamless Telemetry**: Compatible with ThingsBoard's `v1/devices/me/telemetry` format
+  - **Future Security**: MQTTS/TLS implementation planned for separate `feat/secure-mqtts` branch
 - **Enhanced LED Status Indicator**:
   - The onboard ARGB LED (GPIO 48) provides detailed visual indication of device status:
     - **White:** Provisioning mode active
     - **Blue:** Connecting to Wi-Fi network
-    - **Green:** Fully connected to Wi-Fi and MQTTS with SSL/TLS encryption
-    - **Red:** Connection error (Wi-Fi or MQTTS SSL/TLS failure)
+    - **Green:** Fully connected to Wi-Fi and MQTT/ThingsBoard
+    - **Red:** Connection error (Wi-Fi or MQTT connection failure)
     - **Brightness:** Configurable (0-255, default 25)
 - **Real-Time Telemetry**:
   - **Temperature Monitoring**: Built-in ESP32-S3 sensor (Range: -10°C ~ 80°C, ±1°C accuracy)
   - **System Metrics**: RSSI, heap memory, uptime tracking
-  - **Transmission**: JSON payload every 5 seconds over secure MQTTS
+  - **Transmission**: JSON payload every 5 seconds over MQTT to ThingsBoard
   - **Current Memory**: ~323KB free heap at startup
 
 ## 🚀 Quick Start (5 Minutes)
@@ -36,15 +35,28 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
 1. **Flash Firmware**: `idf.py -p /dev/ttyUSB0 flash monitor`
 2. **First Boot**: Device automatically starts in provisioning mode (no credentials stored)
 3. **Connect to Wi-Fi**: Join `ESP32-Provisioning` network (password: `password`)
-4. **Configure Device**: Navigate to `http://192.168.4.1` and enter your Wi-Fi credentials
-5. **Smart Boot**: After restart, device connects directly to stored Wi-Fi (no provisioning needed)
-6. **LED Status**: Green = fully connected with SSL/TLS encryption
+4. **Configure Device**: Navigate to `http://192.168.4.1` - all ThingsBoard settings are pre-filled!
+5. **Smart Boot**: After restart, device connects directly to stored Wi-Fi and ThingsBoard
+6. **LED Status**: Green = fully connected to ThingsBoard, transmitting telemetry every 5 seconds
 
 ### Smart Device Behavior:
 - **First Boot**: Automatic provisioning mode (no Wi-Fi credentials stored)
 - **After Configuration**: Smart boot directly to Wi-Fi connection (credentials stored)
-- **Certificate Management**: Certificate manager automatically initializes development certificates, with support for production certificate sources
+- **ThingsBoard Ready**: Pre-configured with server IP and demo access token for instant testing
 - **Reset to Provisioning**: Use `idf.py erase-flash` to clear credentials and return to provisioning mode
+
+## 📊 ThingsBoard Dashboard Creation
+
+After your ESP32 is connected and sending telemetry data, create professional dashboards:
+
+**🚀 [Complete Dashboard Guide → THINGSBOARD_DASHBOARD.md](./THINGSBOARD_DASHBOARD.md)**
+
+The guide includes:
+- **Step-by-step widget creation** (Temperature gauges, RSSI meters, system health)
+- **Professional styling** with color-coded zones and responsive layouts
+- **Real-time updates** matching your ESP32's 5-second telemetry interval
+- **Troubleshooting section** for common issues and solutions
+- **Advanced features** like alarms, historical charts, and mobile optimization
 
 ## Getting Started (Detailed Setup)
 
