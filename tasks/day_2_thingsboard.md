@@ -1,14 +1,13 @@
 ### ☁️ Day 2: ThingsBoard (Ingestion, Rules, Dashboard)
-*   [ ] **AM: Core Setup & Ingestion**
-    *   [ ] Get the official ThingsBoard CE `docker-compose.yml` and run `docker-compose up -d`.
-    *   [ ] Log in to ThingsBoard at `http://localhost:8080` (Default: `tenant@thingsboard.org` / `tenant`).
-    *   [ ] Create two devices: `ESP32-S3-A` and `ESP32-S3-B`.
-    *   [ ] For each device, copy its access token from the "Credentials" tab.
-    *   [ ] Update your `menuconfig` with the real ThingsBoard tokens for Board A and Board B, then re-flash each board.
-    *   [ ] In the ThingsBoard UI, navigate to each device's "Latest Telemetry" tab and confirm the data is arriving every 5 seconds.
-*   [ ] **PM: Rule Chain & Alarms**
-    *   [ ] Navigate to "Rule Chains" and create a new one: `RSSI Alarm Chain`.
-    *   [ ] Drag in a `script` filter node. Use JS `return msg.rssi < -70;` and connect it to the input node via the "Success" relation.
-    *   [ ] Drag in a `create alarm` node. Configure it to create a "Critical" alarm. Connect the script node's "True" output to this node.
-    *   [ ] **(Optional)** Drag in a `send email` node. Connect the alarm node's "Created" output to it. **Strictly timebox this to 20 minutes.** If it doesn't work, move on. The UI alarm is the key deliverable.
-    *   [ ] Enable "Debug mode" on all nodes. Trigger the alarm by shielding a board's antenna and watch the data flow live.
+*   [x] **AM: Core Setup & Ingestion**
+    *   [x] Get the official ThingsBoard CE `docker-compose.yml` and run `docker-compose up -d`.
+    *   [x] Log in to ThingsBoard at `http://193.164.4.51:8080/login` (Default: `tenant@thingsboard.org` / `tenant`).
+    *   [x] Create a device in the ThingsBoard UI (e.g., `ESP32-S3-A`).
+    *   [x] For the device, copy its access token from the "Credentials" tab.
+    *   [x] **Provision the device**: On first boot, the ESP32 creates a Wi-Fi AP named `ESP32-Provisioning` (password: `password`). Connect to it, navigate to `http://192.168.4.1`, and enter your Wi-Fi credentials, ThingsBoard host (e.g., your computer's IP), and the device access token.
+    *   [x] In the ThingsBoard UI, navigate to the device's "Latest Telemetry" tab and confirm that `temperature`, `rssi`, `heap`, and `uptime` data is arriving every 5 seconds.
+*   [x] **PM: Rule Chain & Alarms**
+    *   [x] Created a rule chain to generate a critical alarm when RSSI is low.
+    *   [x] The rule chain sends a detailed notification to a Mattermost webhook.
+    *   [x] The alarm is automatically cleared when the signal returns to normal.
+    *   [x] For a complete guide, see the new documentation: `thingsboard/thingsboard_rule_chain_setup.md`.
