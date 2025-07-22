@@ -26,7 +26,6 @@ CMakeFiles/
 __pycache__/
 
 # ESP32 specific files
-/managed_components/
 /dependencies.lock
 *.bin
 *.elf
@@ -58,3 +57,5 @@ Thumbs.db
 .env
 docker-compose.override.yml
 /CMakeCache.txt
+
+managed_components/espressif__led_strip/
