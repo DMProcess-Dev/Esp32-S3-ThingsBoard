@@ -3,6 +3,7 @@
 /build-cmake
 /project_elf_src_esp32.c
 main/build/
+CMakeFiles/
 
 # SDK configuration files
 /sdkconfig
