@@ -213,17 +213,53 @@ static void mqtt_app_start(void)
 
     char mqtt_host[64];
     char mqtt_port_str[8];
-    char device_token[64];
+    char device_token[64] = {0};
+    char mqtt_user[32] = {0};
+    char mqtt_pass[32] = {0};
     size_t len;
+    esp_err_t err;
 
+    // Read required MQTT configuration
     len = sizeof(mqtt_host);
     ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_host", mqtt_host, &len));
     len = sizeof(mqtt_port_str);
     ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_port", mqtt_port_str, &len));
+    
+    // Try to read new device_token format first
     len = sizeof(device_token);
-    ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "device_token", device_token, &len));
+    err = nvs_get_str(nvs_handle, "device_token", device_token, &len);
+    
+    bool using_device_token = false;
+    if (err == ESP_OK && strlen(device_token) > 0) {
+        // New format: device_token exists and is not empty
+        using_device_token = true;
+        ESP_LOGI(TAG, "Using ThingsBoard device token authentication (length: %d)", strlen(device_token));
+    } else {
+        // Fallback to old format: mqtt_user/mqtt_pass
+        ESP_LOGI(TAG, "Device token not found, attempting legacy mqtt_user/mqtt_pass format");
+        
+        len = sizeof(mqtt_user);
+        esp_err_t user_err = nvs_get_str(nvs_handle, "mqtt_user", mqtt_user, &len);
+        len = sizeof(mqtt_pass);
+        esp_err_t pass_err = nvs_get_str(nvs_handle, "mqtt_pass", mqtt_pass, &len);
+        
+        if (user_err == ESP_OK && pass_err == ESP_OK) {
+            ESP_LOGI(TAG, "Using legacy MQTT username/password authentication");
+            ESP_LOGI(TAG, "Username: %s", mqtt_user);
+        } else {
+            ESP_LOGE(TAG, "CRITICAL: No valid MQTT credentials found!");
+            ESP_LOGE(TAG, "Please re-provision device with either:");
+            ESP_LOGE(TAG, "1. ThingsBoard device token, OR");
+            ESP_LOGE(TAG, "2. MQTT username/password");
+            nvs_close(nvs_handle);
+            set_led_color(&LED_COLOR_RED);
+            return;
+        }
+    }
 
     nvs_close(nvs_handle);
+    
+    ESP_LOGI(TAG, "MQTT: %s:%s (%s)", mqtt_host, mqtt_port_str, using_device_token ? "Token" : "User/Pass");
 
     char uri[128];
     int port = atoi(mqtt_port_str);
@@ -235,46 +271,42 @@ static void mqtt_app_start(void)
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = uri,
-        .credentials.username = device_token,
-        .credentials.authentication.password = "",
     };
+    
+    // Configure authentication based on available credentials
+    if (using_device_token) {
+        mqtt_cfg.credentials.username = device_token;
+        mqtt_cfg.credentials.authentication.password = "";
+    } else {
+        mqtt_cfg.credentials.username = mqtt_user;
+        mqtt_cfg.credentials.authentication.password = mqtt_pass;
+    }
 
     // Only load certificate for MQTTS connections
     if (port != 1883) {
-        static char ca_cert[2048];
-        size_t cert_len = sizeof(ca_cert);
+        static char *ca_cert = NULL;
+        ca_cert = heap_caps_malloc(2048, MALLOC_CAP_8BIT);
+        if (!ca_cert) {
+            ESP_LOGE(TAG, "Failed to allocate memory for certificate");
+            set_led_color(&LED_COLOR_RED);
+            return;
+        }
         
+        size_t cert_len = 2048;
         esp_err_t cert_err = cert_manager_load(ca_cert, cert_len, &cert_len);
         if (cert_err != ESP_OK) {
-            ESP_LOGE(TAG, "CRITICAL: Failed to load CA certificate from certificate manager!");
-            ESP_LOGE(TAG, "Recovery options:");
-            ESP_LOGE(TAG, "1. Run 'idf.py erase-flash' and reflash firmware to reinitialize certificates");
-            ESP_LOGE(TAG, "2. Provision certificate via secure endpoint using cert_manager_store()");
-            ESP_LOGE(TAG, "3. Check certificate expiration and validity");
-            ESP_LOGE(TAG, "4. Verify NVS partition is not corrupted");
-            ESP_LOGE(TAG, "5. Consult troubleshooting guide in project documentation");
+            ESP_LOGE(TAG, "Failed to load CA certificate: %s", esp_err_to_name(cert_err));
+            free(ca_cert);
             set_led_color(&LED_COLOR_RED);
-            return; // Exit without starting MQTT client
-        }
-        
-        // Display certificate metadata for debugging
-        cert_metadata_t metadata;
-        if (cert_manager_get_metadata(&metadata) == ESP_OK) {
-            ESP_LOGI(TAG, "Certificate loaded successfully:");
-            ESP_LOGI(TAG, "  - Source: %s", cert_manager_get_source_name(metadata.source));
-            ESP_LOGI(TAG, "  - Size: %d bytes", metadata.cert_size);
-            ESP_LOGI(TAG, "  - Valid: %s", metadata.is_valid ? "yes" : "no");
-        } else {
-            ESP_LOGI(TAG, "CA certificate loaded successfully (no metadata available)");
+            return;
         }
 
-        // Configure MQTTS with certificate
         mqtt_cfg.broker.verification.certificate = ca_cert;
         mqtt_cfg.broker.verification.skip_cert_common_name_check = true;
         mqtt_cfg.broker.verification.use_global_ca_store = false;
-        ESP_LOGI(TAG, "Using MQTTS with certificate verification");
+        ESP_LOGI(TAG, "MQTTS with certificate");
     } else {
-        ESP_LOGI(TAG, "Using unencrypted MQTT connection");
+        ESP_LOGI(TAG, "MQTT unencrypted");
     }
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);

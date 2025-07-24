@@ -19,7 +19,6 @@ CMakeFiles/
 *.sln
 *.sw?
 
-
 # Python files
 *.pyc
 *.pyd
@@ -59,3 +58,11 @@ docker-compose.override.yml
 /CMakeCache.txt
 
 managed_components/espressif__led_strip/
+config.env
+kconfigs_projbuild.in
+kconfigs.in
+config/kconfig_menus.json
+config/sdkconfig.cmake
+config/sdkconfig.h
+config/sdkconfig.json
+warnings.txt

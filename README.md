@@ -1,6 +1,6 @@
-# ESP32-S3 ThingsBoard Demo
+# ESP32-S3 ThingsBoard IoT Solution
 
-This project is a demonstration firmware for an ESP32-S3 microcontroller designed to connect to the ThingsBoard IoT platform. It includes a robust web-based provisioning system with ThingsBoard access token authentication and demonstrates real-time telemetry transmission.
+This project is a production-ready firmware for ESP32-S3 microcontrollers that securely connects to the ThingsBoard IoT platform. It includes a robust web-based provisioning system with ThingsBoard access token authentication, enterprise-grade security features, and comprehensive real-time telemetry capabilities with professional dashboard visualization.
 
 ## Current Features
 
@@ -15,7 +15,7 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
   - **Smart Protocol Detection**: Automatic MQTT (port 1883) vs MQTTS (port 8883) selection
   - **Pre-configured Setup**: Default ThingsBoard server (193.164.4.51) and demo access token
   - **Seamless Telemetry**: Compatible with ThingsBoard's `v1/devices/me/telemetry` format
-  - **Future Security**: MQTTS/TLS implementation planned for separate `feat/secure-mqtts` branch
+  - **Enterprise Security**: Full MQTTS/TLS implementation with certificate management
 - **Enhanced LED Status Indicator**:
   - The onboard ARGB LED (GPIO 48) provides detailed visual indication of device status:
     - **White:** Provisioning mode active
@@ -28,6 +28,16 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
   - **System Metrics**: RSSI, heap memory, uptime tracking
   - **Transmission**: JSON payload every 5 seconds over MQTT to ThingsBoard
   - **Current Memory**: ~323KB free heap at startup
+- **Certificate Management System**:
+  - Secure certificate storage in NVS with integrity checking
+  - Automatic certificate initialization on first boot
+  - Development certificate fallback for testing
+  - Certificate rotation support without firmware updates
+- **Professional Dashboard System**:
+  - Comprehensive dashboard creation guide
+  - Custom widget bundle with professionally designed visualization components
+  - Responsive design that works on both desktop and mobile devices
+  - Support for importing pre-built widgets or manual creation
 
 ## 🚀 Quick Start (5 Minutes)
 
@@ -45,18 +55,29 @@ This project is a demonstration firmware for an ESP32-S3 microcontroller designe
 - **ThingsBoard Ready**: Pre-configured with server IP and demo access token for instant testing
 - **Reset to Provisioning**: Use `idf.py erase-flash` to clear credentials and return to provisioning mode
 
-## 📊 ThingsBoard Dashboard Creation
+## 📊 ThingsBoard Integration & Dashboard
 
-After your ESP32 is connected and sending telemetry data, create professional dashboards:
+### Complete Setup Guides
 
-**🚀 [Complete Dashboard Guide → THINGSBOARD_DASHBOARD.md](./THINGSBOARD_DASHBOARD.md)**
+**🎯 New User? Start Here:**
+**[Complete Setup Guide → Thingsboard_Complete_Setup.md](./thingsboard/docs/Thingsboard_Complete_Setup.md)**
+- Device creation & access token setup
+- ESP32 provisioning with ThingsBoard connection
+- Professional dashboard creation with custom widgets
+- Advanced monitoring with alerts & Mattermost integration
 
-The guide includes:
-- **Step-by-step widget creation** (Temperature gauges, RSSI meters, system health)
-- **Professional styling** with color-coded zones and responsive layouts
-- **Real-time updates** matching your ESP32's 5-second telemetry interval
-- **Troubleshooting section** for common issues and solutions
-- **Advanced features** like alarms, historical charts, and mobile optimization
+**📋 Dashboard Only:**
+**[Quick Dashboard Guide → Thingsboard_Dashboard.md](./docs/Thingsboard_Dashboard.md)**
+- For existing ThingsBoard devices
+- Widget import and configuration
+- Professional styling and layouts
+
+### Features Included
+- **Real-time telemetry**: Temperature, RSSI, heap memory, uptime (5-second updates)
+- **Professional widgets**: Glass-morphism design with animations
+- **Mobile responsive**: Works on desktop, tablet, and mobile
+- **Smart alerts**: RSSI thresholds with Mattermost notifications
+- **Easy import**: Pre-built widget JSON files included
 
 ## Getting Started (Detailed Setup)
 
@@ -148,153 +169,22 @@ This project is **production-ready** with enterprise-grade security features:
 - ✅ **Robust Provisioning**: Web-based Wi-Fi and MQTT configuration
 - ✅ **LED Status Indicators**: Visual feedback for all connection states
 - ✅ **Memory Optimized**: ~323KB free heap with efficient certificate storage
+- ✅ **Professional Dashboard System**: Comprehensive visualization with custom widgets
+- ⏳ **RPC Control Features**: Partially implemented (see Day 3 tasks)
 
-## Secure MQTTS Broker Setup (Docker)
+## Development Roadmap
 
-Deploy a production-ready **MQTTS broker** with SSL/TLS encryption using Docker. This setup matches the ESP32 firmware's certificate configuration.
+### Completed Features
+- **Day 1**: Core firmware with Wi-Fi provisioning and basic telemetry
+- **Day 2**: UI/UX enhancements, security features, and ThingsBoard integration
+- **Dashboard System**: Professional visualization components and documentation
 
-**Prerequisites:** Docker and Docker Compose installed on your server.
-
-### 1. Initial Setup
-
-First, clone this project onto your remote server. Then, create the necessary directory structure for Mosquitto.
-
-```bash
-mkdir -p thingsboard/mosquitto/{config,data,log,certs}
-```
-
-### 2. Generate TLS Certificates
-
-To use secure MQTTS, you must generate a set of TLS certificates. The following commands will create a simple Certificate Authority (CA) and use it to sign a server certificate.
-
-**Note:** Run these commands from the project root on your remote server.
-
-**a. Generate the CA private key:**
-```bash
-openssl genrsa -out thingsboard/mosquitto/certs/ca.key 2048
-```
-
-**b. Generate the self-signed CA certificate:**
-(You can press Enter through all the prompts for company name, etc.)
-```bash
-openssl req -new -x509 -days 3650 -key thingsboard/mosquitto/certs/ca.key -out thingsboard/mosquitto/certs/ca.crt
-```
-
-**c. Generate the server's private key:**
-```bash
-openssl genrsa -out thingsboard/mosquitto/certs/server.key 2048
-```
-
-**d. Generate a certificate signing request (CSR) for the server:**
-**Important:** When prompted for the "Common Name", you **must** enter your server's public IP address (e.g., `193.164.4.51`) or its domain name.
-```bash
-openssl req -new -out thingsboard/mosquitto/certs/server.csr -key thingsboard/mosquitto/certs/server.key
-```
-
-**e. Sign the server certificate with your CA:**
-```bash
-openssl x509 -req -in thingsboard/mosquitto/certs/server.csr -CA thingsboard/mosquitto/certs/ca.crt -CAkey thingsboard/mosquitto/certs/ca.key -CAcreateserial -out thingsboard/mosquitto/certs/server.crt -days 365
-```
-
-### 3. Create Secure Configuration File
-
-Create the Mosquitto configuration file using an editor like `nano`:
-```bash
-nano thingsboard/mosquitto/config/mosquitto.conf
-```
-
-Copy and paste the following content into the file. This configuration enables secure MQTTS with SSL/TLS encryption:
-```ini
-persistence true
-persistence_location /mosquitto/data/
-log_dest file /mosquitto/log/mosquitto.log
-allow_anonymous false
-password_file /mosquitto/config/password.txt
-
-# Secured listener on port 8883
-listener 8883
-cafile /mosquitto/certs/ca.crt
-keyfile /mosquitto/certs/server.key
-certfile /mosquitto/certs/server.crt
-```
-Save and exit the editor (in `nano`, press `Ctrl+X`, then `Y`, then `Enter`).
-
-### 3. Create User and Password
-
-Use the `mosquitto_passwd` utility inside a temporary Docker container to create a user and password. This ensures the password file is generated in the correct format.
-
-**Replace `esp32-password` with your own strong, secure password.**
-
-```bash
-docker run -it --rm -v $(pwd)/thingsboard/mosquitto/config:/mosquitto/config eclipse-mosquitto:latest \
-mosquitto_passwd -c -b /mosquitto/config/password.txt esp32-device esp32-password
-```
-
-### 4. Set Secure Permissions
-
-**Important Note**: The number `1883` below is the **Linux User ID** for the Mosquitto service, NOT a port number. The secure MQTTS port is `8883`.
-
-The Mosquitto Docker container runs as a non-root user with ID `1883` for security. Configuration files should be owned by `root` (read-only access), while data/log directories must be writable by the mosquitto user (ID `1883`).
-
-Run these commands to set the correct, secure ownership and permissions:
-
-```bash
-# Set ownership of config files to root for security (read-only access)
-sudo chown root:root thingsboard/mosquitto/config/mosquitto.conf
-sudo chown root:root thingsboard/mosquitto/config/password.txt
-
-# Set ownership of data/log directories to mosquitto user (ID: 1883, NOT port number!)
-# Note: 1883 = Linux User ID, 8883 = MQTTS Port Number
-sudo chown -R 1883:1883 thingsboard/mosquitto/data
-sudo chown -R 1883:1883 thingsboard/mosquitto/log
-```
-
-After creating the password file, you may see a warning that the file owner is not root. The commands above fix this.
-
-### 5. Start the Broker
-
-You can now start the secure Mosquitto broker in detached mode.
-
-```bash
-docker compose up -d
-```
-
-### 6. Verify and Troubleshoot
-
-Check that the container is running and not stuck in a restart loop.
-```bash
-docker ps
-```
-To view the live logs from the Mosquitto broker:
-```bash
-docker compose logs -f mosquitto
-```
-To stop the broker:
-```bash
-docker compose down
-```
-
-### 7. Configure ESP32 for MQTTS
-
-Configure your ESP32 to connect to the secure MQTTS broker:
-1.  Connect to the **`ESP32-Provisioning`** Wi-Fi network (password: `password`)
-2.  Navigate to `http://192.168.4.1`
-3.  Enter your Wi-Fi credentials
-4.  Configure MQTTS settings:
-    *   **Host:** Your server's IP address (e.g., `193.164.4.51`)
-    *   **Port:** `8883` (MQTTS secure port)
-    *   **Username:** `esp32-device`
-    *   **Password:** The secure password you created
-5.  Click **Connect** and watch the LED turn green for successful MQTTS connection
-
-**Note:** The ESP32 firmware automatically uses the correct CA certificate for SSL/TLS validation.
+### Upcoming Features
+- **Day 3**: RPC control functionality for remote device control
+- **REST API Integration**: Examples for retrieving telemetry via REST APIs
+- **Enhanced Widget Library**: Additional specialized widgets for specific use cases
 
 ## Frequently Asked Questions (FAQ)
-
-### Q: Why do I see "1883" in the setup commands when the port is 8883?
-**A:** These are completely different numbers:
-- **1883** = Linux User ID for the Mosquitto service inside Docker containers
-- **8883** = Network port number for secure MQTTS connections
 
 ### Q: What's the difference between MQTT and MQTTS?
 **A:** 
