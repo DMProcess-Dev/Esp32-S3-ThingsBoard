@@ -3,6 +3,7 @@
 /build-cmake
 /project_elf_src_esp32.c
 main/build/
+CMakeFiles/
 
 # SDK configuration files
 /sdkconfig
@@ -18,14 +19,12 @@ main/build/
 *.sln
 *.sw?
 
-
 # Python files
 *.pyc
 *.pyd
 __pycache__/
 
 # ESP32 specific files
-/managed_components/
 /dependencies.lock
 *.bin
 *.elf
@@ -56,3 +55,14 @@ Thumbs.db
 # Docker volumes (if any)
 .env
 docker-compose.override.yml
+/CMakeCache.txt
+
+managed_components/espressif__led_strip/
+config.env
+kconfigs_projbuild.in
+kconfigs.in
+config/kconfig_menus.json
+config/sdkconfig.cmake
+config/sdkconfig.h
+config/sdkconfig.json
+warnings.txt

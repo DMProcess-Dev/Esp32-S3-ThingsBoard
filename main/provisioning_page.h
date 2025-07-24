@@ -153,7 +153,7 @@ static const char provisioning_html[] = R"rawliteral(
             <form action="/connect" method="post">
                 <h2>Wi-Fi</h2>
                 <label for="ssid">SSID</label>
-                <input type="text" id="ssid" name="ssid" required autocomplete="off" value="Oruc">
+                <input type="text" id="ssid" name="ssid" required autocomplete="off" value="">
                 <label for="password">Password</label>
                 <input type="password" id="password" name="password" autocomplete="off">
                 <hr>
@@ -161,11 +161,9 @@ static const char provisioning_html[] = R"rawliteral(
                 <label for="mqtt_host">Host</label>
                 <input type="text" id="mqtt_host" name="mqtt_host" value="193.164.4.51">
                 <label for="mqtt_port">Port</label>
-                <input type="text" id="mqtt_port" name="mqtt_port" value="8883">
-                <label for="mqtt_user">Username</label>
-                <input type="text" id="mqtt_user" name="mqtt_user" autocomplete="off" value="esp32-device">
-                <label for="mqtt_pass">Password</label>
-                <input type="password" id="mqtt_pass" name="mqtt_pass" autocomplete="off" value="esp32-password">
+                <input type="text" id="mqtt_port" name="mqtt_port" value="1883">
+                <label for="device_token">Device Access Token</label>
+                <input type="text" id="device_token" name="device_token" autocomplete="off" value="" required>
                 <input type="submit" value="Connect">
             </form>
             <div id="status-container" style="display: none;">

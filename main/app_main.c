@@ -12,6 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <inttypes.h>
+#include <errno.h>
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
@@ -37,6 +38,8 @@
 #define DEFAULT_LED_BRIGHTNESS 25   // Default brightness level (0-255)
 #define MAX_LED_BRIGHTNESS 255       // Maximum possible brightness
 #define HTTP_CONTENT_BUFFER_SIZE 512 // HTTP POST content buffer
+#define MQTT_INSECURE_PORT 1883      // Standard unencrypted MQTT port
+#define MQTTS_SECURE_PORT 8883       // Standard encrypted MQTTS port
 
 static led_strip_handle_t s_led_strip;
 
@@ -213,58 +216,120 @@ static void mqtt_app_start(void)
 
     char mqtt_host[64];
     char mqtt_port_str[8];
-    char mqtt_user[32];
-    char mqtt_pass[32];
+    char device_token[64] = {0};
+    char mqtt_user[32] = {0};
+    char mqtt_pass[32] = {0};
     size_t len;
+    esp_err_t err;
 
+    // Read required MQTT configuration
     len = sizeof(mqtt_host);
     ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_host", mqtt_host, &len));
     len = sizeof(mqtt_port_str);
     ESP_ERROR_CHECK(nvs_get_str(nvs_handle, "mqtt_port", mqtt_port_str, &len));
-    len = sizeof(mqtt_user);
-    nvs_get_str(nvs_handle, "mqtt_user", mqtt_user, &len);
-    len = sizeof(mqtt_pass);
-    nvs_get_str(nvs_handle, "mqtt_pass", mqtt_pass, &len);
+    
+    // Try to read new device_token format first
+    len = sizeof(device_token);
+    err = nvs_get_str(nvs_handle, "device_token", device_token, &len);
+    
+    bool using_device_token = false;
+    if (err == ESP_OK && strlen(device_token) > 0) {
+        // New format: device_token exists and is not empty
+        using_device_token = true;
+        ESP_LOGI(TAG, "Using ThingsBoard device token authentication (length: %d)", strlen(device_token));
+    } else {
+        // Fallback to old format: mqtt_user/mqtt_pass
+        ESP_LOGI(TAG, "Device token not found, attempting legacy mqtt_user/mqtt_pass format");
+        
+        len = sizeof(mqtt_user);
+        esp_err_t user_err = nvs_get_str(nvs_handle, "mqtt_user", mqtt_user, &len);
+        len = sizeof(mqtt_pass);
+        esp_err_t pass_err = nvs_get_str(nvs_handle, "mqtt_pass", mqtt_pass, &len);
+        
+        if (user_err == ESP_OK && pass_err == ESP_OK) {
+            ESP_LOGI(TAG, "Using legacy MQTT username/password authentication");
+            ESP_LOGI(TAG, "Username: %s", mqtt_user);
+        } else {
+            ESP_LOGE(TAG, "CRITICAL: No valid MQTT credentials found!");
+            ESP_LOGE(TAG, "Please re-provision device with either:");
+            ESP_LOGE(TAG, "1. ThingsBoard device token, OR");
+            ESP_LOGE(TAG, "2. MQTT username/password");
+            nvs_close(nvs_handle);
+            set_led_color(&LED_COLOR_RED);
+            return;
+        }
+    }
 
     nvs_close(nvs_handle);
+    
+    ESP_LOGI(TAG, "MQTT: %s:%s (%s)", mqtt_host, mqtt_port_str, using_device_token ? "Token" : "User/Pass");
 
     char uri[128];
-    snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, mqtt_port_str); // Use configured port for MQTTS
-
-    // Load CA certificate using certificate manager
-    static char ca_cert[2048];
-    size_t cert_len = sizeof(ca_cert);
-    
-    esp_err_t cert_err = cert_manager_load(ca_cert, cert_len, &cert_len);
-    if (cert_err != ESP_OK) {
-        ESP_LOGE(TAG, "CRITICAL: Failed to load CA certificate from certificate manager!");
-        ESP_LOGE(TAG, "Recovery options:");
-        ESP_LOGE(TAG, "1. Run 'idf.py erase-flash' and reflash firmware to reinitialize certificates");
-        ESP_LOGE(TAG, "2. Provision certificate via secure endpoint using cert_manager_store()");
-        ESP_LOGE(TAG, "3. Check certificate expiration and validity");
-        ESP_LOGE(TAG, "4. Verify NVS partition is not corrupted");
-        ESP_LOGE(TAG, "5. Consult troubleshooting guide in project documentation");
+    char *endptr;
+    errno = 0;
+    long port_long = strtol(mqtt_port_str, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || port_long < 1 || port_long > 65535) {
+        ESP_LOGE(TAG, "Invalid MQTT port number: %s (must be 1-65535)", mqtt_port_str);
         set_led_color(&LED_COLOR_RED);
-        return; // Exit without starting MQTT client
+        return;
     }
-    
-    // Display certificate metadata for debugging
-    cert_metadata_t metadata;
-    if (cert_manager_get_metadata(&metadata) == ESP_OK) {
-        ESP_LOGI(TAG, "Certificate loaded successfully:");
-        ESP_LOGI(TAG, "  - Source: %s", cert_manager_get_source_name(metadata.source));
-        ESP_LOGI(TAG, "  - Size: %d bytes", metadata.cert_size);
-        ESP_LOGI(TAG, "  - Valid: %s", metadata.is_valid ? "yes" : "no");
+    int port = (int)port_long;
+    if (port == MQTT_INSECURE_PORT) {
+        snprintf(uri, sizeof(uri), "mqtt://%s:%s", mqtt_host, mqtt_port_str); // Unencrypted MQTT
     } else {
-        ESP_LOGI(TAG, "CA certificate loaded successfully (no metadata available)");
+        snprintf(uri, sizeof(uri), "mqtts://%s:%s", mqtt_host, mqtt_port_str); // Encrypted MQTTS
     }
 
     esp_mqtt_client_config_t mqtt_cfg = {
         .broker.address.uri = uri,
-        .broker.verification.certificate = ca_cert,
-        .credentials.username = mqtt_user,
-        .credentials.authentication.password = mqtt_pass,
     };
+    
+    // Configure authentication based on available credentials
+    if (using_device_token) {
+        mqtt_cfg.credentials.username = device_token;
+        mqtt_cfg.credentials.authentication.password = "";
+    } else {
+        mqtt_cfg.credentials.username = mqtt_user;
+        mqtt_cfg.credentials.authentication.password = mqtt_pass;
+    }
+
+    // Only load certificate for MQTTS connections
+    if (port != MQTT_INSECURE_PORT) {
+        static char *ca_cert = NULL;
+        ca_cert = heap_caps_malloc(2048, MALLOC_CAP_8BIT);
+        if (!ca_cert) {
+            ESP_LOGE(TAG, "Failed to allocate memory for certificate");
+            set_led_color(&LED_COLOR_RED);
+            return;
+        }
+        
+        size_t cert_len = 2048;
+        esp_err_t cert_err = cert_manager_load(ca_cert, cert_len, &cert_len);
+        if (cert_err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to load CA certificate: %s", esp_err_to_name(cert_err));
+            free(ca_cert);
+            set_led_color(&LED_COLOR_RED);
+            return;
+        }
+
+        mqtt_cfg.broker.verification.certificate = ca_cert;
+        
+#ifdef CONFIG_MQTT_DISABLE_CERT_VERIFICATION
+        mqtt_cfg.broker.verification.skip_cert_common_name_check = true;
+        ESP_LOGW(TAG, "Development mode: Certificate common name verification disabled");
+        ESP_LOGW(TAG, "To enable full security, remove CONFIG_MQTT_DISABLE_CERT_VERIFICATION");
+#else
+        mqtt_cfg.broker.verification.skip_cert_common_name_check = false;
+        ESP_LOGI(TAG, "Production mode: Certificate common name verification enabled");
+#endif
+        
+        mqtt_cfg.broker.verification.use_global_ca_store = false;
+        ESP_LOGI(TAG, "MQTTS with certificate configured");
+    } else {
+        ESP_LOGW(TAG, "WARNING: Using unencrypted MQTT connection on port %d", MQTT_INSECURE_PORT);
+        ESP_LOGW(TAG, "This connection is NOT SECURE and should only be used for development");
+        ESP_LOGI(TAG, "MQTT unencrypted");
+    }
 
     esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
     esp_mqtt_client_register_event(client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
@@ -428,23 +493,49 @@ static esp_err_t connect_post_handler(httpd_req_t *req)
     char password[64] = {0};
     char mqtt_host[64] = {0};
     char mqtt_port_str[8] = {0};
-    char mqtt_user[32] = {0};
-    char mqtt_pass[32] = {0};
+    char device_token[64] = {0};
 
     if (httpd_query_key_value(buf, "ssid", ssid, sizeof(ssid)) != ESP_OK ||
         httpd_query_key_value(buf, "password", password, sizeof(password)) != ESP_OK ||
         httpd_query_key_value(buf, "mqtt_host", mqtt_host, sizeof(mqtt_host)) != ESP_OK ||
-        httpd_query_key_value(buf, "mqtt_port", mqtt_port_str, sizeof(mqtt_port_str)) != ESP_OK) {
+        httpd_query_key_value(buf, "mqtt_port", mqtt_port_str, sizeof(mqtt_port_str)) != ESP_OK ||
+        httpd_query_key_value(buf, "device_token", device_token, sizeof(device_token)) != ESP_OK) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing required fields");
         return ESP_FAIL;
     }
 
-    // Optional fields
-    httpd_query_key_value(buf, "mqtt_user", mqtt_user, sizeof(mqtt_user));
-    httpd_query_key_value(buf, "mqtt_pass", mqtt_pass, sizeof(mqtt_pass));
-
     ESP_LOGI(TAG, "Received SSID: %s", ssid);
     ESP_LOGI(TAG, "Received MQTT Host: %s", mqtt_host);
+    ESP_LOGI(TAG, "Received ThingsBoard device token (length: %d)", strlen(device_token));
+
+    // Validate input fields
+    if (strlen(ssid) == 0 || strlen(ssid) > 31) {
+        ESP_LOGE(TAG, "Invalid SSID: must be 1-31 characters (received: %d)", strlen(ssid));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "SSID must be 1-31 characters");
+        return ESP_FAIL;
+    }
+    
+    if (strlen(mqtt_host) == 0 || strlen(mqtt_host) > 63) {
+        ESP_LOGE(TAG, "Invalid MQTT host: must be 1-63 characters (received: %d)", strlen(mqtt_host));
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "MQTT host must be 1-63 characters");
+        return ESP_FAIL;
+    }
+    
+    if (strlen(device_token) == 0) {
+        ESP_LOGE(TAG, "Device token cannot be empty");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Device token cannot be empty");
+        return ESP_FAIL;
+    }
+    
+    // Validate port number
+    char *endptr;
+    errno = 0;
+    long port_long = strtol(mqtt_port_str, &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || port_long < 1 || port_long > 65535) {
+        ESP_LOGE(TAG, "Invalid MQTT port: %s (must be 1-65535)", mqtt_port_str);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "MQTT port must be 1-65535");
+        return ESP_FAIL;
+    }
 
     // Store credentials in NVS
     nvs_handle_t nvs_handle;
@@ -453,8 +544,7 @@ static esp_err_t connect_post_handler(httpd_req_t *req)
     ESP_ERROR_CHECK(nvs_set_str(nvs_handle, "password", password));
     ESP_ERROR_CHECK(nvs_set_str(nvs_handle, "mqtt_host", mqtt_host));
     ESP_ERROR_CHECK(nvs_set_str(nvs_handle, "mqtt_port", mqtt_port_str));
-    ESP_ERROR_CHECK(nvs_set_str(nvs_handle, "mqtt_user", mqtt_user));
-    ESP_ERROR_CHECK(nvs_set_str(nvs_handle, "mqtt_pass", mqtt_pass));
+    ESP_ERROR_CHECK(nvs_set_str(nvs_handle, "device_token", device_token));
     ESP_ERROR_CHECK(nvs_commit(nvs_handle));
     nvs_close(nvs_handle);
 
@@ -535,6 +625,8 @@ static void start_provisioning_server(void)
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+
     // Clear any stored STA credentials
     wifi_config_t sta_config = {0};
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &sta_config));
@@ -552,7 +644,6 @@ static void start_provisioning_server(void)
         ap_config.ap.authmode = WIFI_AUTH_OPEN;
     }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_AP, &ap_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
